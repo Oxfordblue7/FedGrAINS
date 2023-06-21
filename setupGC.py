@@ -1,0 +1,212 @@
+import random
+from random import choices
+import numpy as np
+import pandas as pd
+import sys
+import torch
+import torch.nn.functional as F
+from torch_geometric.datasets import  Data,Planetoid
+from torch_geometric.data import DataLoader
+from torch_geometric.utils import to_networkx, subgraph
+
+
+from community import community_louvain
+
+from src.models import GCN, serverGCN, GAT, serverGAT, SAGE, serverGraphSage
+from src.server import Server
+from src.client import Client_GC
+from utils import get_maxDegree, get_stats, split_data, get_numGraphLabels
+
+
+def _louvain_graph_cut(g, num_owners, delta):
+
+    G = to_networkx(g, to_undirected=True)
+
+    node_subjects = g.y
+
+    partition = community_louvain.best_partition(G)
+
+    groups=[]
+
+    for key in partition.keys():
+        if partition[key] not in groups:
+            groups.append(partition[key])
+    print(groups)
+    partition_groups = {group_i:[] for group_i in groups}
+
+    for key in partition.keys():
+        partition_groups[partition[key]].append(key)
+
+    group_len_max=len(list(G.nodes()))//num_owners-delta
+    for group_i in groups:
+        while len(partition_groups[group_i])>group_len_max:
+            long_group=list.copy(partition_groups[group_i])
+            partition_groups[group_i]=list.copy(long_group[:group_len_max])
+            new_grp_i=max(groups)+1
+            groups.append(new_grp_i)
+            partition_groups[new_grp_i]=long_group[group_len_max:]
+
+    print(groups)
+
+    len_list=[]
+    for group_i in groups:
+        len_list.append(len(partition_groups[group_i]))
+
+    len_dict={}
+
+    for i in range(len(groups)):
+        len_dict[groups[i]]=len_list[i]
+    sort_len_dict={k: v for k, v in sorted(len_dict.items(), key=lambda item: item[1],reverse=True)}
+
+    owner_node_ids={owner_id:[] for owner_id in range(num_owners)}
+
+    owner_nodes_len=len(list(G.nodes()))//num_owners
+    owner_list=[i for i in range(num_owners)]
+    owner_ind=0
+
+
+    for group_i in sort_len_dict.keys():
+        while len(owner_node_ids[owner_list[owner_ind]]) >= owner_nodes_len:
+            owner_list.remove(owner_list[owner_ind])
+            owner_ind = owner_ind % len(owner_list)
+        while len(owner_node_ids[owner_list[owner_ind]]) + len(partition_groups[group_i]) >= owner_nodes_len + delta:
+            owner_ind = (owner_ind + 1) % len(owner_list)
+        owner_node_ids[owner_list[owner_ind]]+=partition_groups[group_i]
+
+    for owner_i in owner_node_ids.keys():
+        print('nodes len for '+str(owner_i)+' = '+str(len(owner_node_ids[owner_i])))
+
+    local_G = []
+    local_node_subj = []
+    local_nodes_ids = []
+    subj_set = [k.item() for k in torch.unique(node_subjects)]
+    local_node_subj_0=[]
+
+    for owner_i in range(num_owners):
+        partition_i = owner_node_ids[owner_i]
+        sbj_i = node_subjects[partition_i]
+        local_node_subj_0.append(sbj_i)
+    count=[]
+    for owner_i in range(num_owners):
+        count_i={k:[] for k in subj_set}
+        sbj_i=local_node_subj_0[owner_i]
+        for i,j in enumerate(sbj_i):
+            count_i[j.item()].append(i)
+        count.append(count_i)
+    for k in subj_set:
+        for owner_i in range(num_owners):
+            if len(count[owner_i][k])<2:
+                for j in range(num_owners):
+                    if len(count[j][k])>2:
+                        id=count[j][k][-1]
+                        count[j][k].remove(id)
+                        count[owner_i][k].append(id)
+                        owner_node_ids[owner_i].append(id)
+                        owner_node_ids[j].remove(id)
+                        j=num_owners
+
+    #Get the masks for train validation and training
+    train_mask, val_mask , test_mask = g.train_mask, g.val_mask, g.test_mask
+    X= g.x
+    #Split the graph to num_owners
+    for owner_i in range(num_owners):
+
+        local_loaders =  {}
+
+        #Obtain the partition for client i and get the subjects
+        partition_i = owner_node_ids[owner_i]
+
+        #Reduce masks over the Louvain partitions
+        #CHECK AGAIN
+        train_mask_i = [j if i in partition_i else False for i,j in enumerate(train_mask)]
+        val_mask_i = [j if i in partition_i else False for i,j in enumerate(val_mask)]
+        test_mask_i = [j if i in partition_i else False for i,j in enumerate(test_mask)]
+
+        #Create induced subgraph 
+        #CHECK AGAIN
+        print(g.edge_index)
+        subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)
+
+        local_loaders["train"] = Data(x = X[train_mask_i], y = node_subjects[train_mask_i] ,
+                                    edge_index = subgraph_i)
+
+        local_loaders["val"] = Data(x = X[val_mask_i], y = node_subjects[val_mask_i] ,
+                                    edge_index = subgraph_i)
+
+        local_loaders["test"] = Data(x = X[test_mask_i], y = node_subjects[test_mask_i] ,
+                                    edge_index = subgraph_i)
+
+        local_G.append(local_loaders)
+
+    return local_G
+
+def _randChunk(graphs, num_client, overlap, seed=None):
+    random.seed(seed)
+    np.random.seed(seed)
+
+    totalNum = len(graphs)
+    minSize = min(50, int(totalNum/num_client))
+    graphs_chunks = []
+    if not overlap:
+        for i in range(num_client):
+            graphs_chunks.append(graphs[i*minSize:(i+1)*minSize])
+        for g in graphs[num_client*minSize:]:
+            idx_chunk = np.random.randint(low=0, high=num_client, size=1)[0]
+            graphs_chunks[idx_chunk].append(g)
+    else:
+        sizes = np.random.randint(low=50, high=150, size=num_client)
+        for s in sizes:
+            graphs_chunks.append(choices(graphs, k=s))
+    return graphs_chunks
+
+
+def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=False, seed=None, overlap=False):
+    if data in ["Cora", "Citeseer", "Pubmed"]:
+        pyg_dataset = Planetoid(f"{datapath}/Planetoid", data)
+        num_classes= pyg_dataset.num_classes
+        dataset = pyg_dataset[0]
+    else:
+        #MS_academic
+        raise Exception("MS Academic not yet implemented!")
+
+
+    #Louvain partitioning the graph
+    partition_dicts = _louvain_graph_cut(dataset, num_client, delta)
+    graphs_chunks = _randChunk(graphs, num_client, overlap, seed=seed)
+    splitedData = {}
+    df = pd.DataFrame()
+    num_node_features = graphs[0].num_node_features
+    for idx, chunks in enumerate(graphs_chunks):
+        ds = f'{idx}-{data}'
+        ds_tvt = chunks
+        #Train-val-tst split
+        ds_train, ds_vt = split_data(ds_tvt, train=0.8, test=0.2, shuffle=True, seed=seed)
+        ds_val, ds_test = split_data(ds_vt, train=0.5, test=0.5, shuffle=True, seed=seed)
+        #Generate dataloaders
+        dataloader_train = DataLoader(ds_train, batch_size=batchSize, shuffle=True)
+        dataloader_val = DataLoader(ds_val, batch_size=batchSize, shuffle=True)
+        dataloader_test = DataLoader(ds_test, batch_size=batchSize, shuffle=True)
+        num_graph_labels = get_numGraphLabels(ds_train)
+        splitedData[ds] = ({'train': dataloader_train, 'val': dataloader_val, 'test': dataloader_test},
+                           num_node_features, num_graph_labels, len(ds_train))
+        df = get_stats(df, ds, ds_train, graphs_val=ds_val, graphs_test=ds_test)
+
+    return splitedData, num_classes, df
+
+
+def setup_devices(splitedData, num_classes, args):
+    idx_clients = {}
+    clients = []
+    for idx, ds in enumerate(splitedData.keys()):
+        idx_clients[idx] = ds
+        dataloaders, num_node_features, num_graph_labels, train_size = splitedData[ds]
+        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dropout)
+        # optimizer = torch.optim.Adam(cmodel_gc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, cmodel_gc.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+        clients.append(Client_GC(cmodel_gc, idx, ds, train_size, dataloaders, optimizer, args))
+
+    #Create server model
+    smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nhid=args.hidden , nout = num_classes)
+    server = Server(smodel, args.device)
+
+    return clients, server, idx_clients
