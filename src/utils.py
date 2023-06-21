@@ -54,7 +54,8 @@ def use_node_attributes(graphs):
     return new_graphs
 
 def split_data(graphs, train=None, test=None, shuffle=True, seed=None):
-    y = torch.cat([graph.y for graph in graphs])
+    y = graphs.y
+    print(graphs)
     graphs_tv, graphs_test = train_test_split(graphs, train_size=train, test_size=test, stratify=y, shuffle=shuffle, random_state=seed)
     return graphs_tv, graphs_test
 

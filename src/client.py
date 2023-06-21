@@ -267,3 +267,19 @@ def train_gc_prox(model, dataloaders, optimizer, local_epoch, device, gconvNames
             'testLosses': losses_test, 'testAccs': accs_test, 'convGradsNorm': convGradsNorm}
 
 def eval_gc_prox(model, test_loader, device, gconvNames, mu, Wt):
+    model.eval()
+
+    total_loss = 0.
+    acc_sum = 0.
+    ngraphs = 0
+    for batch in test_loader:
+        batch.to(device)
+        with torch.no_grad():
+            pred = model(batch)
+            label = batch.y
+            loss = model.loss(pred, label) + mu / 2. * _prox_term(model, gconvNames, Wt)
+        total_loss += loss.item() * batch.num_graphs
+        acc_sum += pred.max(dim=1)[1].eq(label).sum().item()
+        ngraphs += batch.num_graphs
+
+    return total_loss/ngraphs, acc_sum/ngraphs

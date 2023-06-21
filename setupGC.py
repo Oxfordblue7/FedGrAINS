@@ -5,17 +5,18 @@ import pandas as pd
 import sys
 import torch
 import torch.nn.functional as F
-from torch_geometric.datasets import  Data,Planetoid
+from torch_geometric.datasets import Planetoid
+from torch_geometric.data import Data
 from torch_geometric.data import DataLoader
 from torch_geometric.utils import to_networkx, subgraph
 
 
 from community import community_louvain
 
-from src.models import GCN, serverGCN, GAT, serverGAT, SAGE, serverGraphSage
+from src.models import GCN, serverGCN, GAT, serverGAT, SAGE, serverSAGE
 from src.server import Server
 from src.client import Client_GC
-from utils import get_maxDegree, get_stats, split_data, get_numGraphLabels
+from src.utils import get_maxDegree, get_stats, split_data, get_numGraphLabels
 
 
 def _louvain_graph_cut(g, num_owners, delta):
@@ -31,7 +32,7 @@ def _louvain_graph_cut(g, num_owners, delta):
     for key in partition.keys():
         if partition[key] not in groups:
             groups.append(partition[key])
-    print(groups)
+    #print(groups)
     partition_groups = {group_i:[] for group_i in groups}
 
     for key in partition.keys():
@@ -45,13 +46,11 @@ def _louvain_graph_cut(g, num_owners, delta):
             new_grp_i=max(groups)+1
             groups.append(new_grp_i)
             partition_groups[new_grp_i]=long_group[group_len_max:]
-
-    print(groups)
+    #print(partition_groups)
 
     len_list=[]
     for group_i in groups:
         len_list.append(len(partition_groups[group_i]))
-
     len_dict={}
 
     for i in range(len(groups)):
@@ -64,7 +63,6 @@ def _louvain_graph_cut(g, num_owners, delta):
     owner_list=[i for i in range(num_owners)]
     owner_ind=0
 
-
     for group_i in sort_len_dict.keys():
         while len(owner_node_ids[owner_list[owner_ind]]) >= owner_nodes_len:
             owner_list.remove(owner_list[owner_ind])
@@ -72,7 +70,6 @@ def _louvain_graph_cut(g, num_owners, delta):
         while len(owner_node_ids[owner_list[owner_ind]]) + len(partition_groups[group_i]) >= owner_nodes_len + delta:
             owner_ind = (owner_ind + 1) % len(owner_list)
         owner_node_ids[owner_list[owner_ind]]+=partition_groups[group_i]
-
     for owner_i in owner_node_ids.keys():
         print('nodes len for '+str(owner_i)+' = '+str(len(owner_node_ids[owner_i])))
 
@@ -99,10 +96,12 @@ def _louvain_graph_cut(g, num_owners, delta):
                 for j in range(num_owners):
                     if len(count[j][k])>2:
                         id=count[j][k][-1]
-                        count[j][k].remove(id)
+                        if id in count[j][k]:
+                            count[j][k].remove(id)
                         count[owner_i][k].append(id)
                         owner_node_ids[owner_i].append(id)
-                        owner_node_ids[j].remove(id)
+                        if id in owner_node_ids[j]:
+                            owner_node_ids[j].remove(id)
                         j=num_owners
 
     #Get the masks for train validation and training
@@ -118,25 +117,23 @@ def _louvain_graph_cut(g, num_owners, delta):
 
         #Reduce masks over the Louvain partitions
         #CHECK AGAIN
-        train_mask_i = [j if i in partition_i else False for i,j in enumerate(train_mask)]
-        val_mask_i = [j if i in partition_i else False for i,j in enumerate(val_mask)]
-        test_mask_i = [j if i in partition_i else False for i,j in enumerate(test_mask)]
+        # train_mask_i = [j if i in partition_i else False for i,j in enumerate(train_mask)]
+        # val_mask_i = [j if i in partition_i else False for i,j in enumerate(val_mask)]
+        # test_mask_i = [j if i in partition_i else False for i,j in enumerate(test_mask)]
 
         #Create induced subgraph 
         #CHECK AGAIN
-        print(g.edge_index)
-        subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)
+        subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)[0]
+        print("Induced subgraph for client" , subgraph_i)
+        # local_loaders["val"] = Data(x = X[val_mask_i], y = node_subjects[val_mask_i] ,
+        #                             edge_index = subgraph_i)
 
-        local_loaders["train"] = Data(x = X[train_mask_i], y = node_subjects[train_mask_i] ,
-                                    edge_index = subgraph_i)
+        # local_loaders["test"] = Data(x = X[test_mask_i], y = node_subjects[test_mask_i] ,
+        #                             edge_index = subgraph_i)
 
-        local_loaders["val"] = Data(x = X[val_mask_i], y = node_subjects[val_mask_i] ,
-                                    edge_index = subgraph_i)
+        local_G.append(g.subgraph(subgraph_i))
 
-        local_loaders["test"] = Data(x = X[test_mask_i], y = node_subjects[test_mask_i] ,
-                                    edge_index = subgraph_i)
-
-        local_G.append(local_loaders)
+    # return local_G
 
     return local_G
 
@@ -171,14 +168,15 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
 
 
     #Louvain partitioning the graph
-    partition_dicts = _louvain_graph_cut(dataset, num_client, delta)
-    graphs_chunks = _randChunk(graphs, num_client, overlap, seed=seed)
+    graphs_chunks = _louvain_graph_cut(dataset, num_client, delta)
+    #graphs_chunks = _randChunk(graphs, num_client, overlap, seed=seed)
     splitedData = {}
     df = pd.DataFrame()
-    num_node_features = graphs[0].num_node_features
+    #num_node_features = graphs[0].num_node_features
     for idx, chunks in enumerate(graphs_chunks):
         ds = f'{idx}-{data}'
         ds_tvt = chunks
+        print(ds_tvt)
         #Train-val-tst split
         ds_train, ds_vt = split_data(ds_tvt, train=0.8, test=0.2, shuffle=True, seed=seed)
         ds_val, ds_test = split_data(ds_vt, train=0.5, test=0.5, shuffle=True, seed=seed)

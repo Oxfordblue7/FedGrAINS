@@ -1,9 +1,15 @@
-import os
+import os, sys
 import argparse
 import random
 import torch
 from pathlib import Path
 import copy
+
+from pathlib import Path
+
+lib_dir = (Path(__file__).parent / "..").resolve()
+if str(lib_dir) not in sys.path:
+    sys.path.insert(0, str(lib_dir))
 
 import setupGC
 from training import *
@@ -77,10 +83,14 @@ if __name__ == '__main__':
                         help='The base path for outputting.')
     parser.add_argument('--repeat', help='index of repeating;',
                         type=int, default=None)
+    parser.add_argument('--delta', help='Louvain parameter;',
+                        type=int, default=20)
     parser.add_argument('--dataset', help='specify the dataset',
                         type=str, default='Cora')
     parser.add_argument('--model', help='specify the model',
                         type=str, default='GCN')
+    parser.add_argument('--algo', help='specify the Federated optimization',
+                        type=str, default='fedprox')
     parser.add_argument('--overlap', help='whether clients have overlapped data',
                         type=bool, default=False)
     parser.add_argument('--convert_x', help='whether to convert original node features to one-hot degree features',
@@ -110,7 +120,7 @@ if __name__ == '__main__':
         outpath = os.path.join(outbase, f"oneDS-overlap")
     else:
         outpath = os.path.join(outbase, f"oneDS-nonOverlap")
-    outpath = os.path.join(outpath, f'{args.data_group}-{args.num_clients}clients')
+    outpath = os.path.join(outpath, f'{args.dataset}-{args.num_clients}clients')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
@@ -128,7 +138,7 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData, df_stats = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
+    splitedData, df_stats = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
                                                       convert_x=args.convert_x, seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
