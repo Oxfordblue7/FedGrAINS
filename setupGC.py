@@ -115,23 +115,13 @@ def _louvain_graph_cut(g, num_owners, delta):
         #Obtain the partition for client i and get the subjects
         partition_i = owner_node_ids[owner_i]
 
-        #Reduce masks over the Louvain partitions
-        #CHECK AGAIN
-        # train_mask_i = [j if i in partition_i else False for i,j in enumerate(train_mask)]
-        # val_mask_i = [j if i in partition_i else False for i,j in enumerate(val_mask)]
-        # test_mask_i = [j if i in partition_i else False for i,j in enumerate(test_mask)]
-
         #Create induced subgraph 
-        #CHECK AGAIN
         subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)[0]
-        print("Induced subgraph for client" , subgraph_i)
-        # local_loaders["val"] = Data(x = X[val_mask_i], y = node_subjects[val_mask_i] ,
-        #                             edge_index = subgraph_i)
+        G_i = g.subgraph(subgraph_i)
+        print(G_i)
+        print(G_i.train_mask.sum() + G_i.val_mask.sum() + G_i.test_mask.sum())
 
-        # local_loaders["test"] = Data(x = X[test_mask_i], y = node_subjects[test_mask_i] ,
-        #                             edge_index = subgraph_i)
-
-        local_G.append(g.subgraph(subgraph_i))
+        local_G.append(G_i)
 
     # return local_G
 
@@ -161,6 +151,7 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
     if data in ["Cora", "Citeseer", "Pubmed"]:
         pyg_dataset = Planetoid(f"{datapath}/Planetoid", data)
         num_classes= pyg_dataset.num_classes
+        num_features  = pyg_dataset.num_features
         dataset = pyg_dataset[0]
     else:
         #MS_academic
@@ -176,7 +167,7 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
     for idx, chunks in enumerate(graphs_chunks):
         ds = f'{idx}-{data}'
         ds_tvt = chunks
-        print(ds_tvt)
+        
         #Train-val-tst split
         ds_train, ds_vt = split_data(ds_tvt, train=0.8, test=0.2, shuffle=True, seed=seed)
         ds_val, ds_test = split_data(ds_vt, train=0.5, test=0.5, shuffle=True, seed=seed)
@@ -186,7 +177,7 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
         dataloader_test = DataLoader(ds_test, batch_size=batchSize, shuffle=True)
         num_graph_labels = get_numGraphLabels(ds_train)
         splitedData[ds] = ({'train': dataloader_train, 'val': dataloader_val, 'test': dataloader_test},
-                           num_node_features, num_graph_labels, len(ds_train))
+                           num_features, num_graph_labels, len(ds_train))
         df = get_stats(df, ds, ds_train, graphs_val=ds_val, graphs_test=ds_test)
 
     return splitedData, num_classes, df
