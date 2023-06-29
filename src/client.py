@@ -26,7 +26,7 @@ class Client_GC():
         self.convWeightsNorm = 0.
         self.convDWsNorm = 0.
 
-    def download_from_server(self, args, server):
+    def download_from_server(self, server):
         self.gconvNames = server.W.keys()
         for k in server.W:
                 self.W[k].data = server.W[k].data.clone()
@@ -120,17 +120,20 @@ def calc_gradsNorm(gconvNames, Ws):
 def train_gc(model, name, dataloaders, dropout, optimizer, local_epoch, device):
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
     train_loader, val_loader, test_loader = dataloaders['train'], dataloaders['val'], dataloaders['test']
+
+    train_loader.to(device)
+    print(train_loader)
+    print(dropout)
     for epoch in range(local_epoch):
         model.train()
-
-        for batch in train_loader:
-            optimizer.zero_grad()
-            batch.to(device)
-            pred = model(batch.x, batch.edge_index, dropout)
-            loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask])
-            loss.backward()
-            optimizer.step()
-
+        optimizer.zero_grad()
+        
+        pred = model(train_loader.x, train_loader.edge_index, dropout)
+        loss = model.loss(pred, train_loader.y)
+        loss.backward()
+        optimizer.step()
+        #for batch in train_loader:
+            
         total_loss, acc = eval_gc(model, train_loader, device)
         loss_v, acc_v = eval_gc(model, val_loader, device)
         loss_tt, acc_tt = eval_gc(model, test_loader, device)
@@ -145,9 +148,9 @@ def train_gc(model, name, dataloaders, dropout, optimizer, local_epoch, device):
 
         
     #After local epochs, get the averaged loss. acc
-    wandb.log({'{}-train_loss'.format(name)  : np.mean(losses_train), '{}-train_acc'.format(name): np.mean(accs_train) ,
-               '{}-val_loss'.format(name)  : np.mean(losses_val), '{}-val_acc'.format(name): np.mean(accs_val),
-               '{}-test_loss'.format(name)  : np.mean(losses_test), '{}-test_acc'.format(name): np.mean(accs_test)   })
+    # wandb.log({'{}-train_loss'.format(name)  : np.mean(losses_train), '{}-train_acc'.format(name): np.mean(accs_train) ,
+    #            '{}-val_loss'.format(name)  : np.mean(losses_val), '{}-val_acc'.format(name): np.mean(accs_val),
+    #            '{}-test_loss'.format(name)  : np.mean(losses_test), '{}-test_acc'.format(name): np.mean(accs_test)   })
     return {'trainingLosses': losses_train, 'trainingAccs': accs_train, 'valLosses': losses_val, 'valAccs': accs_val,
             'testLosses': losses_test, 'testAccs': accs_test}
 
@@ -158,14 +161,16 @@ def eval_gc(model, test_loader, device):
     total_loss = 0.
     acc_sum = 0.
     nnodes = 0
-    for batch in test_loader:
-        batch.to(device)
-        pred = model(batch.x, batch.edge_index)
-        label = batch.y
-        loss = model.loss(pred[batch.train_mask], label[batch.train_mask])
-        total_loss += loss.item() 
-        acc_sum += int(pred[batch.train_mask].eq(label[batch.train_mask]).sum().item())
-        nnodes += int(batch.test_mask.sum())
+    test_loader.to(device)
+    pred = model(test_loader.x, test_loader.edge_index)
+    
+    label = test_loader.y
+    loss = model.loss(pred, label)
+    total_loss += loss.item() 
+    acc_sum += int(pred.argmax(dim=1).eq(label).sum().item())
+    nnodes += int(len(test_loader)) #Check
+    #for batch in test_loader:
+       
 
     return total_loss/nnodes, acc_sum/nnodes
 
@@ -181,17 +186,19 @@ def train_gc_prox(model, dataloaders, dropout, optimizer, local_epoch, device, g
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
     convGradsNorm = []
     train_loader, val_loader, test_loader = dataloaders['train'], dataloaders['val'], dataloaders['test']
+    train_loader.to(device)
     for epoch in range(local_epoch):
         model.train()
-
-        for _, batch in enumerate(train_loader):
-            batch.to(device)
-            optimizer.zero_grad()
-            pred = model(batch.x, batch.edge_index, dropout)
-            label = batch.y
-            loss = model.loss(pred[batch.train_mask], label[batch.train_mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
-            loss.backward()
-            optimizer.step()
+        
+        optimizer.zero_grad()
+        pred = model(train_loader.x, train_loader.edge_index, dropout)
+        label = train_loader.y
+        loss = model.loss(pred, label) + mu / 2. * _prox_term(model, gconvNames, Wt)
+        loss.backward()
+        optimizer.step()
+        #for _, batch in enumerate(train_loader):
+            
+            
 
         total_loss, acc = eval_gc(model, train_loader, device)
         loss_v, acc_v = eval_gc(model, val_loader, device)
@@ -216,13 +223,14 @@ def eval_gc_prox(model, test_loader, device, gconvNames, mu, Wt):
     total_loss = 0.
     acc_sum = 0.
     nnodes = 0
-    for batch in test_loader:
-        batch.to(device)
-        pred = model(batch.x, batch.edge_index)
-        label = batch.y
-        loss = model.loss(pred[batch.train_mask], label[batch.train_mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
-        total_loss += loss.item() 
-        acc_sum += int(pred[batch.train_mask].eq(label[batch.train_mask]).sum().item())
-        nnodes += int(batch.test_mask.sum())
+    test_loader.to(device)
+    pred = model(test_loader.x, test_loader.edge_index)
+    label = test_loader.y
+    loss = model.loss(pred, label) + mu / 2. * _prox_term(model, gconvNames, Wt)
+    total_loss += loss.item() 
+    acc_sum += int(pred.argmax(dim=1).eq(label).sum().item())
+    nnodes += int(len(test_loader)) #Check
+    #for batch in test_loader:
+        
 
     return total_loss/nnodes, acc_sum/nnodes

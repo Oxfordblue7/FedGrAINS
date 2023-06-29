@@ -68,12 +68,12 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=5e-4,
                         help='Weight decay (L2 loss on parameters).')
     parser.add_argument('--nlayer', type=int, default=3,
-                        help='Number of GINconv layers')
+                        help='Number of GNN layers')
     parser.add_argument('--hidden', type=int, default=64,
                         help='Number of hidden units.')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
-    parser.add_argument('-dm', '--dropping-method', type=str, default='DropEdge',
+    parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
                     help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage].')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size for node classification.')

@@ -54,12 +54,12 @@ def use_node_attributes(graphs):
     return new_graphs
 
 def split_data(graph , train=None, test=None, shuffle=True, seed=None):
-    print("In split data " , graph)
     y = graph.y
-    graphs_tv, graphs_test = train_test_split(torch.range(0, len(y)), train_size=train, test_size=test, stratify=y, shuffle=shuffle, random_state=seed)
-    print(graphs_tv)
-    print(graphs_test)
-    return graphs_tv, graphs_test
+    print(len(y))
+    graphs_tv, graphs_test = train_test_split(torch.arange(0, len(y)), train_size=train, test_size=test, shuffle=shuffle, random_state=seed)
+    subgraph_tr = subgraph(torch.LongTensor(graphs_tv), graph.edge_index)[0]
+    subgraph_test = subgraph(torch.LongTensor(graphs_test), graph.edge_index)[0]
+    return graph.subgraph(subgraph_tr), graph.subgraph(subgraph_test)
 
 
 def get_numGraphLabels(dataset):
@@ -81,20 +81,20 @@ def _get_avg_nodes_edges(graphs):
 
 def get_stats(df, ds, graphs_train, graphs_val=None, graphs_test=None):
     df.loc[ds, "#graphs_train"] = len(graphs_train)
-    avgNodes, avgEdges = _get_avg_nodes_edges(graphs_train)
-    df.loc[ds, 'avgNodes_train'] = avgNodes
-    df.loc[ds, 'avgEdges_train'] = avgEdges
+    # avgNodes, avgEdges = _get_avg_nodes_edges(graphs_train)
+    # df.loc[ds, 'avgNodes_train'] = avgNodes
+    # df.loc[ds, 'avgEdges_train'] = avgEdges
 
     if graphs_val:
         df.loc[ds, '#graphs_val'] = len(graphs_val)
-        avgNodes, avgEdges = _get_avg_nodes_edges(graphs_val)
-        df.loc[ds, 'avgNodes_val'] = avgNodes
-        df.loc[ds, 'avgEdges_val'] = avgEdges
+        # avgNodes, avgEdges = _get_avg_nodes_edges(graphs_val)
+        # df.loc[ds, 'avgNodes_val'] = avgNodes
+        # df.loc[ds, 'avgEdges_val'] = avgEdges
 
     if graphs_test:
         df.loc[ds, '#graphs_test'] = len(graphs_test)
-        avgNodes, avgEdges = _get_avg_nodes_edges(graphs_test)
-        df.loc[ds, 'avgNodes_test'] = avgNodes
-        df.loc[ds, 'avgEdges_test'] = avgEdges
+        # avgNodes, avgEdges = _get_avg_nodes_edges(graphs_test)
+        # df.loc[ds, 'avgNodes_test'] = avgNodes
+        # df.loc[ds, 'avgEdges_test'] = avgEdges
 
     return df

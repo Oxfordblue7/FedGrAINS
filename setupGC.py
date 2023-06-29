@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Planetoid
-from torch_geometric.data import Data,DataLoader
+from torch_geometric.loader import DataLoader
 from sklearn import preprocessing
 from torch_geometric.utils import to_networkx, subgraph
 
@@ -112,11 +112,8 @@ def _louvain_graph_cut(g, num_owners, delta):
     #Split the graph to num_owners
     for owner_i in range(num_owners):
 
-        local_loaders =  {}
-
         #Obtain the partition for client i and get the subjects
         partition_i = owner_node_ids[owner_i]
-
         #Create induced subgraph 
         subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)[0]
         G_i = g[0].subgraph(subgraph_i)
@@ -172,11 +169,14 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
         ds_train, ds_vt = split_data(ds_tvt, train=0.8, test=0.2, shuffle=True, seed=seed)
         ds_val, ds_test = split_data(ds_vt, train=0.5, test=0.5, shuffle=True, seed=seed)
         #Generate dataloaders
-        dataloader_train = DataLoader(ds_train, batch_size=batchSize, shuffle=True)
+        print("Train dataset : " ,ds_train)
+        print("Val dataset : " ,ds_val)
+        print("test dataset : " ,ds_test)
+        dataloader_train =  DataLoader(ds_train, batch_size=batchSize, shuffle=True)
         dataloader_val = DataLoader(ds_val, batch_size=batchSize, shuffle=True)
         dataloader_test = DataLoader(ds_test, batch_size=batchSize, shuffle=True)
-        num_graph_labels = get_numGraphLabels(ds_train)
-        splitedData[ds] = ({'train': dataloader_train, 'val': dataloader_val, 'test': dataloader_test},
+        num_graph_labels = len(torch.unique(ds_train.y))
+        splitedData[ds] = ({'train': ds_train, 'val': ds_val, 'test': ds_test},
                            num_features, num_graph_labels, len(ds_train))
         df = get_stats(df, ds, ds_train, graphs_val=ds_val, graphs_test=ds_test)
 
@@ -189,12 +189,12 @@ def setup_devices(splitedData, num_classes, args):
     for idx, ds in enumerate(splitedData.keys()):
         idx_clients[idx] = ds
         dataloaders, num_node_features, num_graph_labels, train_size = splitedData[ds]
-        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dm)
+        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dropping_method)
         optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, cmodel_gc.parameters()), lr=args.lr, weight_decay=args.weight_decay)
         clients.append(Client_GC(cmodel_gc, idx, ds, train_size, dataloaders, optimizer, args))
 
     #Create server model
-    smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nhid=args.hidden , nout = num_classes)
+    smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nhid=args.hidden )
     server = Server(smodel, args.device)
 
     return clients, server, idx_clients

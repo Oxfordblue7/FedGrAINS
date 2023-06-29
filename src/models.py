@@ -40,7 +40,6 @@ class serverSAGE(torch.nn.Module):
     def __init__(self, nlayer, nhid):
         super(serverSAGE, self).__init__()
         self.graph_convs = torch.nn.ModuleList()
-        self.graph_convs.append(SAGEConv(nhid, nhid))
         for l in range(nlayer - 1):
             self.graph_convs.append(SAGEConv(nhid, nhid))
 
@@ -48,7 +47,6 @@ class serverGAT(torch.nn.Module):
     def __init__(self, nlayer, nhid):
         super(serverGAT, self).__init__()
         self.graph_convs = torch.nn.ModuleList()
-        self.graph_convs.append(GATConv(nhid, nhid))
         for l in range(nlayer - 1):
             self.graph_convs.append(GATConv(nhid, nhid))
 
@@ -56,7 +54,6 @@ class serverGCN(torch.nn.Module):
     def __init__(self, nlayer, nhid):
         super(serverGCN, self).__init__()
         self.graph_convs = torch.nn.ModuleList()
-        self.graph_convs.append(GCNConv(nhid, nhid))
         for l in range(nlayer - 1):
             self.graph_convs.append(GCNConv(nhid, nhid))
 
@@ -92,7 +89,6 @@ class GCN(torch.nn.Module):
         self.drop_block = DropBlock(dropping_method)
         self.edge_weight = None
 
-        self.transform_first = transform_first
         self.num_layers = nlayer
         self.nclass = nclass
 
