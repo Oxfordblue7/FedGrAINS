@@ -5,15 +5,15 @@ import pandas as pd
 import sys
 import torch
 import torch.nn.functional as F
+import torch_geometric.transforms as T
 from torch_geometric.datasets import Planetoid
-from torch_geometric.data import Data
-from torch_geometric.data import DataLoader
+from torch_geometric.data import Data,DataLoader
+from sklearn import preprocessing
 from torch_geometric.utils import to_networkx, subgraph
-
 
 from community import community_louvain
 
-from src.models import GCN, serverGCN, GAT, serverGAT, SAGE, serverSAGE
+from src.models import *
 from src.server import Server
 from src.client import Client_GC
 from src.utils import get_maxDegree, get_stats, split_data, get_numGraphLabels
@@ -21,8 +21,8 @@ from src.utils import get_maxDegree, get_stats, split_data, get_numGraphLabels
 
 def _louvain_graph_cut(g, num_owners, delta):
 
-    G = to_networkx(g, to_undirected=True)
-
+    G = to_networkx(g[0], to_undirected=True)
+    node_features = g.x
     node_subjects = g.y
 
     partition = community_louvain.best_partition(G)
@@ -76,19 +76,26 @@ def _louvain_graph_cut(g, num_owners, delta):
     local_G = []
     local_node_subj = []
     local_nodes_ids = []
+    target_encoding = preprocessing.LabelBinarizer()
+    target = target_encoding.fit_transform(node_subjects)
+    local_target = []
     subj_set = [k.item() for k in torch.unique(node_subjects)]
     local_node_subj_0=[]
 
     for owner_i in range(num_owners):
         partition_i = owner_node_ids[owner_i]
-        sbj_i = node_subjects[partition_i]
+        #locs_i = g[0][partition_i]
+        sbj_i = node_subjects.clone()
+        sbj_i[:] = "" if node_subjects[0].__class__ == str else 0
+        sbj_i[partition_i] = node_subjects[partition_i]
         local_node_subj_0.append(sbj_i)
     count=[]
     for owner_i in range(num_owners):
         count_i={k:[] for k in subj_set}
         sbj_i=local_node_subj_0[owner_i]
         for i,j in enumerate(sbj_i):
-            count_i[j.item()].append(i)
+            if j!=0 and j!="":
+                count_i[int(j.item())].append(i)
         count.append(count_i)
     for k in subj_set:
         for owner_i in range(num_owners):
@@ -96,17 +103,12 @@ def _louvain_graph_cut(g, num_owners, delta):
                 for j in range(num_owners):
                     if len(count[j][k])>2:
                         id=count[j][k][-1]
-                        if id in count[j][k]:
-                            count[j][k].remove(id)
+                        count[j][k].remove(id)
                         count[owner_i][k].append(id)
                         owner_node_ids[owner_i].append(id)
-                        if id in owner_node_ids[j]:
-                            owner_node_ids[j].remove(id)
+                        owner_node_ids[j].remove(id)
                         j=num_owners
 
-    #Get the masks for train validation and training
-    train_mask, val_mask , test_mask = g.train_mask, g.val_mask, g.test_mask
-    X= g.x
     #Split the graph to num_owners
     for owner_i in range(num_owners):
 
@@ -117,10 +119,9 @@ def _louvain_graph_cut(g, num_owners, delta):
 
         #Create induced subgraph 
         subgraph_i = subgraph(torch.LongTensor(partition_i), g.edge_index)[0]
-        G_i = g.subgraph(subgraph_i)
-        print(G_i)
-        print(G_i.train_mask.sum() + G_i.val_mask.sum() + G_i.test_mask.sum())
-
+        G_i = g[0].subgraph(subgraph_i)
+        print("Data of owner ", owner_i , " " , G_i)
+        
         local_G.append(G_i)
 
     # return local_G
@@ -159,7 +160,7 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
 
 
     #Louvain partitioning the graph
-    graphs_chunks = _louvain_graph_cut(dataset, num_client, delta)
+    graphs_chunks = _louvain_graph_cut(pyg_dataset, num_client, delta)
     #graphs_chunks = _randChunk(graphs, num_client, overlap, seed=seed)
     splitedData = {}
     df = pd.DataFrame()
@@ -167,7 +168,6 @@ def prepareData_oneDS(datapath, data, num_client, delta, batchSize, convert_x=Fa
     for idx, chunks in enumerate(graphs_chunks):
         ds = f'{idx}-{data}'
         ds_tvt = chunks
-        
         #Train-val-tst split
         ds_train, ds_vt = split_data(ds_tvt, train=0.8, test=0.2, shuffle=True, seed=seed)
         ds_val, ds_test = split_data(ds_vt, train=0.5, test=0.5, shuffle=True, seed=seed)
@@ -189,8 +189,7 @@ def setup_devices(splitedData, num_classes, args):
     for idx, ds in enumerate(splitedData.keys()):
         idx_clients[idx] = ds
         dataloaders, num_node_features, num_graph_labels, train_size = splitedData[ds]
-        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dropout)
-        # optimizer = torch.optim.Adam(cmodel_gc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dm)
         optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, cmodel_gc.parameters()), lr=args.lr, weight_decay=args.weight_decay)
         clients.append(Client_GC(cmodel_gc, idx, ds, train_size, dataloaders, optimizer, args))
 

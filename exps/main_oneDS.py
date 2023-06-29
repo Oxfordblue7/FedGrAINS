@@ -73,6 +73,8 @@ if __name__ == '__main__':
                         help='Number of hidden units.')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
+    parser.add_argument('-dm', '--dropping-method', type=str, default='DropEdge',
+                    help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage].')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
@@ -138,7 +140,7 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData, df_stats = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
+    splitedData,num_classes, df_stats = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
                                                       convert_x=args.convert_x, seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
@@ -150,7 +152,7 @@ if __name__ == '__main__':
     df_stats.to_csv(outf)
     print(f"Wrote to {outf}")
 
-    init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData, args)
+    init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")
 
     process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=50)

@@ -53,10 +53,12 @@ def use_node_attributes(graphs):
         new_graphs.append(new_graph)
     return new_graphs
 
-def split_data(graphs, train=None, test=None, shuffle=True, seed=None):
-    y = graphs.y
-    print(graphs)
-    graphs_tv, graphs_test = train_test_split(graphs, train_size=train, test_size=test, stratify=y, shuffle=shuffle, random_state=seed)
+def split_data(graph , train=None, test=None, shuffle=True, seed=None):
+    print("In split data " , graph)
+    y = graph.y
+    graphs_tv, graphs_test = train_test_split(torch.range(0, len(y)), train_size=train, test_size=test, stratify=y, shuffle=shuffle, random_state=seed)
+    print(graphs_tv)
+    print(graphs_test)
     return graphs_tv, graphs_test
 
 
