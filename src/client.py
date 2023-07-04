@@ -79,7 +79,7 @@ class Client_GC():
         self.convGradsNorm = torch.norm(flatten(grads_conv)).item()
 
     def evaluate(self):
-        return eval_gc(self.model, self.dataLoader['test'], self.args.device)
+        return eval_gc(self.model, self.dataLoader, self.dataLoader.dataset[0].test_mask,  self.args.device)
 
     def local_train_prox(self, local_epoch, mu):
         """ For FedProx """
@@ -117,26 +117,24 @@ def calc_gradsNorm(gconvNames, Ws):
     convGradsNorm = torch.norm(flatten(grads_conv)).item()
     return convGradsNorm
 
-def train_gc(model, name, dataloaders, dropout, optimizer, local_epoch, device):
+def train_gc(model, name, dataloader, dropout, optimizer, local_epoch, device):
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
-    train_loader, val_loader, test_loader = dataloaders['train'], dataloaders['val'], dataloaders['test']
-
-    train_loader.to(device)
-    print(train_loader)
-    print(dropout)
+    model.train()
+    model.to(device)
     for epoch in range(local_epoch):
         model.train()
+    for _,batch in enumerate(dataloader):
         optimizer.zero_grad()
-        
-        pred = model(train_loader.x, train_loader.edge_index, dropout)
-        loss = model.loss(pred, train_loader.y)
+        batch.to(device)
+        pred = model(batch.x, batch.edge_index, dropout)
+        loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask])
         loss.backward()
         optimizer.step()
-        #for batch in train_loader:
+        
             
-        total_loss, acc = eval_gc(model, train_loader, device)
-        loss_v, acc_v = eval_gc(model, val_loader, device)
-        loss_tt, acc_tt = eval_gc(model, test_loader, device)
+        total_loss, acc = eval_gc(model, dataloader, batch.train_mask,  device)
+        loss_v, acc_v = eval_gc(model, dataloader,batch.val_mask , device)
+        loss_tt, acc_tt = eval_gc(model, dataloader, batch.test_mask, device)
 
         #After one epoch 
         losses_train.append(total_loss)
@@ -146,7 +144,6 @@ def train_gc(model, name, dataloaders, dropout, optimizer, local_epoch, device):
         losses_test.append(loss_tt)
         accs_test.append(acc_tt)
 
-        
     #After local epochs, get the averaged loss. acc
     # wandb.log({'{}-train_loss'.format(name)  : np.mean(losses_train), '{}-train_acc'.format(name): np.mean(accs_train) ,
     #            '{}-val_loss'.format(name)  : np.mean(losses_val), '{}-val_acc'.format(name): np.mean(accs_val),
@@ -155,24 +152,21 @@ def train_gc(model, name, dataloaders, dropout, optimizer, local_epoch, device):
             'testLosses': losses_test, 'testAccs': accs_test}
 
 @torch.no_grad()
-def eval_gc(model, test_loader, device):
+def eval_gc(model, loader, mask, device):
     model.eval()
 
-    total_loss = 0.
-    acc_sum = 0.
-    nnodes = 0
-    test_loader.to(device)
-    pred = model(test_loader.x, test_loader.edge_index)
+    for batch in loader:
+        batch.to(device)
+        pred = model(batch.x, batch.edge_index)
+        
+        label = batch.y
+        loss = model.loss(pred[mask], label[mask])
+        total_loss = loss.item() 
+        correct = (pred.argmax(dim=1) == label).sum()
     
-    label = test_loader.y
-    loss = model.loss(pred, label)
-    total_loss += loss.item() 
-    acc_sum += int(pred.argmax(dim=1).eq(label).sum().item())
-    nnodes += int(len(test_loader)) #Check
-    #for batch in test_loader:
-       
+        
 
-    return total_loss/nnodes, acc_sum/nnodes
+    return total_loss, int(correct)/int(len(loader))
 
 def _prox_term(model, gconvNames, Wt):
     prox = torch.tensor(0., requires_grad=True)
@@ -182,34 +176,32 @@ def _prox_term(model, gconvNames, Wt):
             prox = prox + torch.norm(param - Wt[name]).pow(2)
     return prox
 
-def train_gc_prox(model, dataloaders, dropout, optimizer, local_epoch, device, gconvNames, Ws, mu, Wt):
+def train_gc_prox(model, dataloader, dropout, optimizer, local_epoch, device, gconvNames, Ws, mu, Wt):
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
     convGradsNorm = []
-    train_loader, val_loader, test_loader = dataloaders['train'], dataloaders['val'], dataloaders['test']
-    train_loader.to(device)
     for epoch in range(local_epoch):
         model.train()
         
-        optimizer.zero_grad()
-        pred = model(train_loader.x, train_loader.edge_index, dropout)
-        label = train_loader.y
-        loss = model.loss(pred, label) + mu / 2. * _prox_term(model, gconvNames, Wt)
-        loss.backward()
-        optimizer.step()
-        #for _, batch in enumerate(train_loader):
-            
-            
+        for batch in dataloader:
+            batch.to(device)
+            optimizer.zero_grad()
+            pred = model(batch.x, batch.edge_index, dropout)
+            label = batch.y
+            loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
+            loss.backward()
+            optimizer.step()
+                
+                
+            total_loss, acc = eval_gc(model, dataloader, batch.train_mask, device)
+            loss_v, acc_v = eval_gc(model, dataloader, batch.val_mask,  device)
+            loss_tt, acc_tt = eval_gc(model, dataloader, batch.test_mask, device)
 
-        total_loss, acc = eval_gc(model, train_loader, device)
-        loss_v, acc_v = eval_gc(model, val_loader, device)
-        loss_tt, acc_tt = eval_gc(model, test_loader, device)
-
-        losses_train.append(total_loss)
-        accs_train.append(acc)
-        losses_val.append(loss_v)
-        accs_val.append(acc_v)
-        losses_test.append(loss_tt)
-        accs_test.append(acc_tt)
+            losses_train.append(total_loss)
+            accs_train.append(acc)
+            losses_val.append(loss_v)
+            accs_val.append(acc_v)
+            losses_test.append(loss_tt)
+            accs_test.append(acc_tt)
 
         convGradsNorm.append(calc_gradsNorm(gconvNames, Ws))
 
@@ -217,20 +209,18 @@ def train_gc_prox(model, dataloaders, dropout, optimizer, local_epoch, device, g
             'testLosses': losses_test, 'testAccs': accs_test, 'convGradsNorm': convGradsNorm}
 
 @torch.no_grad()
-def eval_gc_prox(model, test_loader, device, gconvNames, mu, Wt):
+def eval_gc_prox(model, loader, mask, device, gconvNames, mu, Wt):
     model.eval()
+    model.to(device)
 
-    total_loss = 0.
-    acc_sum = 0.
-    nnodes = 0
-    test_loader.to(device)
-    pred = model(test_loader.x, test_loader.edge_index)
-    label = test_loader.y
-    loss = model.loss(pred, label) + mu / 2. * _prox_term(model, gconvNames, Wt)
-    total_loss += loss.item() 
-    acc_sum += int(pred.argmax(dim=1).eq(label).sum().item())
-    nnodes += int(len(test_loader)) #Check
-    #for batch in test_loader:
+    for batch in loader:
+        batch.to(device)
+        pred = model(batch.x, batch.edge_index)
+        
+        label = batch.y
+        loss = model.loss(pred[mask], label[mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
+        total_loss = loss.item() 
+        correct = (pred.argmax(dim=1) == label).sum()
         
 
-    return total_loss/nnodes, acc_sum/nnodes
+    return total_loss, int(correct)/int(len(loader))

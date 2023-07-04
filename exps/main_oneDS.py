@@ -115,7 +115,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    args.device = "cpu" #"cuda" if torch.cuda.is_available() else "cpu"
 
     outbase = os.path.join(args.outbase, f'seqLen{args.seq_length}')
     if  args.overlap:
@@ -140,17 +140,17 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData,num_classes, df_stats = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
+    splitedData,num_classes = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
                                                       convert_x=args.convert_x, seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
     # save statistics of data on clients
-    if args.repeat is None:
-        outf = os.path.join(outpath, f'stats_trainData{suffix}.csv')
-    else:
-        outf = os.path.join(outpath, "repeats", f'{args.repeat}_stats_trainData{suffix}.csv')
-    df_stats.to_csv(outf)
-    print(f"Wrote to {outf}")
+    # if args.repeat is None:
+    #     outf = os.path.join(outpath, f'stats_trainData{suffix}.csv')
+    # else:
+    #     outf = os.path.join(outpath, "repeats", f'{args.repeat}_stats_trainData{suffix}.csv')
+    # df_stats.to_csv(outf)
+    # print(f"Wrote to {outf}")
 
     init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")
