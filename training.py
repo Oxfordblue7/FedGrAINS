@@ -47,7 +47,10 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
     frame = pd.DataFrame()
     for client in clients:
         loss, acc = client.evaluate()
+        frame.loc[client.name, 'train_acc'] =  client.train_stats['trainingAccs'][-1]
+        frame.loc[client.name, 'val_acc'] =  client.train_stats['valAccs'][-1]  
         frame.loc[client.name, 'test_acc'] = acc
+
 
     def highlight_max(s):
         is_max = s == s.max()
@@ -89,8 +92,12 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
 
     frame = pd.DataFrame()
     for client in clients:
-        loss, acc = client.evaluate()
+        loss, acc = client.evaluate()        
+        frame.loc[client.name, 'train_acc'] =  client.train_stats['trainingAccs'][-1]
+        frame.loc[client.name, 'val_acc'] =  client.train_stats['valAccs'][-1]
         frame.loc[client.name, 'test_acc'] = acc
+
+
 
     def highlight_max(s):
         is_max = s == s.max()
