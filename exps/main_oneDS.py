@@ -81,7 +81,7 @@ if __name__ == '__main__':
                         type=int, default=123)
     parser.add_argument('--datapath', type=str, default='./data',
                         help='The input path of data.')
-    parser.add_argument('--outbase', type=str, default='./outputs',
+    parser.add_argument('--outbase', type=str, default='./outputs/raw',
                         help='The base path for outputting.')
     parser.add_argument('--repeat', help='index of repeating;',
                         type=int, default=None)
@@ -117,12 +117,7 @@ if __name__ == '__main__':
 
     args.device = "cpu" #"cuda" if torch.cuda.is_available() else "cpu"
 
-    outbase = os.path.join(args.outbase, f'seqLen{args.seq_length}')
-    if  args.overlap:
-        outpath = os.path.join(outbase, f"oneDS-overlap")
-    else:
-        outpath = os.path.join(outbase, f"oneDS-nonOverlap")
-    outpath = os.path.join(outpath, f'{args.dataset}-{args.num_clients}clients')
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
