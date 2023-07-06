@@ -105,6 +105,8 @@ def copy(target, source, keys):
     for name in keys:
         target[name].data = source[name].data.clone()
 
+
+
 def subtract_(target, minuend, subtrahend):
     for name in target:
         target[name].data = minuend[name].data.clone() - subtrahend[name].data.clone()
@@ -155,19 +157,30 @@ def train_gc(model, name, dataloader, dropout, optimizer, local_epoch, device):
 def eval_gc(model, loader, mask, device):
     model.eval()
 
-    for batch in loader:
-        batch.to(device)
-        pred = model(batch.x, batch.edge_index)
-        
-        label = batch.y
-        loss = model.loss(pred[mask], label[mask])
-        total_loss = loss.item() 
-        correct = (pred.argmax(dim=1) == label).sum()
+
+    with torch.no_grad():
+        targets, preds, lss = [], [], []
+        for batch in loader:
+            batch.to(device)
+            pred = model(batch.x, batch.edge_index)
+            
+            label = batch.y
+            loss = model.loss(pred[mask], label[mask])
+            total_loss = loss.item() 
+            preds.append(pred[mask])
+            targets.append(label[mask])
+            lss.append(total_loss)
+
+        targets = torch.stack(targets).view(-1)
+        if targets.size(0) == 0: return  np.mean(lss) , 1.0
+
+        preds = torch.stack(preds).view(targets.size(0) , -1 )
+
+        preds = preds.max(1)[1]
+        acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
+        return np.mean(lss) , acc
     
-        
-
-    return total_loss, int(correct)/int(len(loader))
-
+    
 def _prox_term(model, gconvNames, Wt):
     prox = torch.tensor(0., requires_grad=True)
     for name, param in model.named_parameters():
@@ -213,14 +226,24 @@ def eval_gc_prox(model, loader, mask, device, gconvNames, mu, Wt):
     model.eval()
     model.to(device)
 
-    for batch in loader:
-        batch.to(device)
-        pred = model(batch.x, batch.edge_index)
+    with torch.no_grad():
+        targets, preds, lss = [], [], []
+        for batch in loader:
+            batch.to(device)
+            pred = model(batch.x, batch.edge_index)
+            
+            label = batch.y
+            loss = model.loss(pred[mask], label[mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
+            total_loss = loss.item() 
+            preds.append(pred[mask])
+            targets.append(label[mask])
+            lss.append(total_loss)
         
-        label = batch.y
-        loss = model.loss(pred[mask], label[mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
-        total_loss = loss.item() 
-        correct = (pred.argmax(dim=1) == label).sum()
-        
+        targets = torch.stack(targets).view(-1)
+        if targets.size(0) == 0: return  np.mean(lss) , 1.0
+        preds = torch.stack(preds).view(targets.size(0) , -1 )
+        preds = preds.max(1)[1]
+        acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
+        return np.mean(lss) , acc
 
-    return total_loss, int(correct)/int(len(loader))
+    
