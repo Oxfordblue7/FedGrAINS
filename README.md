@@ -5,8 +5,9 @@
 ## Requirements & Data Preparation
 To install requirements
 ```
-pip3 install -r requirements.txt
+conda env create -f fedgdrop.yaml
 ```
+Then, METIS (for data generation), please follow  ```https://github.com/james77777778/metis_python```
 
 ## Running examples
 * OneDS: Distributing one dataset to a number of clients:
@@ -25,7 +26,7 @@ python exps/aggregateResults.py --data_group 'chem'
 * Finally, the results are stored in ```./outputs/processed/```.
 
 ## Options
-The default values for various paramters parsed to the experiment are given in ```./exps/main_oneDS.py```. Details about some of those parameters are given here.
+The default values for  parameters parsed to the experiment are given in ```./exps/main_oneDS.py```. Details about some of those parameters are given here.
 * ```--dataset:```  The subgraph FL dataset. Default: 'Cora'. Options: 'Citeseer', 'PubMed', 'MS', .
 * ```--num_rounds:``` The number of rounds for simulation. Default: 200.
 * ```--local_epoch:``` The number of local epochs. Default: 1.
