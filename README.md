@@ -20,7 +20,7 @@ bash run_gcn_cora.sh
 
 * Then, to process the raw results:
 ```
-python exps/aggregateResults.py --data_group 'chem'
+python exps/aggregateResults.py --dataset 'Cora' --numcli 10 --mu 0.01
 ```
 
 * Finally, the results are stored in ```./outputs/processed/```.
