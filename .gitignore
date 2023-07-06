@@ -1,3 +1,5 @@
 metis-5.1.0/*
 data/*
 outputs/*
+__pycache__/*
+src/__pycache__/*
