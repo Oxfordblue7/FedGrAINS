@@ -47,14 +47,16 @@ if __name__ == '__main__':
                         type=int, default=10, choices=[3,5,7,10,20,30,50])
     parser.add_argument('--mu', help='specify the FedProx parameter',
                         type=float, default=0.01)
-
+    parser.add_argument('--drop_method', type=str, default='DropEdge',
+                    help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage].')
+    parser.add_argument('--dropout', type=float, default=0.5,
+                        help='Dropout rate (1 - keep probability).')
     try:
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
-
-    args.inpath = './outputs/raw/' + args.dataset +'-'+str(args.numcli)+'clients/repeats'
-    args.outpath = './outputs/processed/' + args.dataset +'-'+str(args.numcli)+'clients'
+    args.inpath = './outputs/raw/' + args.dataset +'-'+str(args.numcli)+'clients-' + args.drop_method +'-dropout' + str(args.dropout)+ '/repeats'
+    args.outpath = './outputs/processed/' + args.dataset +'-'+str(args.numcli)+'clients-' + args.drop_method +'-dropout' + str(args.dropout)
 
     #     """ multiDS: aggregagte all outputs """
     main_aggregate_all_multiDS(args)
