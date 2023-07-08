@@ -29,6 +29,9 @@ class DropBlock:
             edge_index = edge_index.t()[perm][:edge_reserved_size].t()
         elif self.dropping_method == 'Dropout':
             x = F.dropout(x, drop_rate)
+        else:
+            #The case where we do not employ dropout methods at all 
+            return x, edge_index
 
         return x, edge_index
 
