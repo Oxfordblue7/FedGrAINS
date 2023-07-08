@@ -55,7 +55,7 @@ def process_fedprox(clients, server, mu):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=str, default='cpu',
+    parser.add_argument('--device', type=str, default='gpu',
                         help='CPU / GPU device.')
     parser.add_argument('--num_repeat', type=int, default=5,
                         help='number of repeating rounds to simulate;')
@@ -67,6 +67,8 @@ if __name__ == '__main__':
                         help='learning rate for inner solver;')
     parser.add_argument('--weight_decay', type=float, default=5e-4,
                         help='Weight decay (L2 loss on parameters).')
+    parser.add_argument('--mu', type=float, default=1e-2,
+                        help='FedProx  regularization parameter.')
     parser.add_argument('--nlayer', type=int, default=3,
                         help='Number of GNN layers')
     parser.add_argument('--hidden', type=int, default=64,
@@ -74,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
-                    help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage].')
+                    help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
@@ -115,9 +117,9 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    args.device = "cpu" #"cuda" if torch.cuda.is_available() else "cpu"
+    args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients')
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.dropping_method}-dropout{args.dropout}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
@@ -150,6 +152,9 @@ if __name__ == '__main__':
     init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")
 
-    process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=50)
-    process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
-    process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=0.01)
+    if args.algo == 'selftrain':
+        process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.local_epoch)
+    elif args.algo == 'fedavg':
+        process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
+    else:
+        process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)

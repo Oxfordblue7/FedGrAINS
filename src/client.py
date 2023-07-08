@@ -106,7 +106,6 @@ def copy(target, source, keys):
         target[name].data = source[name].data.clone()
 
 
-
 def subtract_(target, minuend, subtrahend):
     for name in target:
         target[name].data = minuend[name].data.clone() - subtrahend[name].data.clone()
