@@ -59,7 +59,7 @@ if __name__ == '__main__':
                         help='CPU / GPU device.')
     parser.add_argument('--num_repeat', type=int, default=5,
                         help='number of repeating rounds to simulate;')
-    parser.add_argument('--num_rounds', type=int, default=200,
+    parser.add_argument('--num_rounds', type=int, default=100,
                         help='number of rounds to simulate;')
     parser.add_argument('--local_epoch', type=int, default=1,
                         help='number of local epochs;')
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
-                        type=int, default=123)
+                        type=int, default=42)
     parser.add_argument('--datapath', type=str, default='./data',
                         help='The input path of data.')
     parser.add_argument('--outbase', type=str, default='./outputs/raw',
@@ -152,9 +152,6 @@ if __name__ == '__main__':
     init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")
 
-    if args.algo == 'selftrain':
-        process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.local_epoch)
-    elif args.algo == 'fedavg':
-        process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
-    else:
-        process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
+    process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.local_epoch)
+    process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
+    process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
