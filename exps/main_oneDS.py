@@ -35,9 +35,9 @@ def process_fedavg(clients, server):
     print("Running FedAvg ...")
     frame = run_fedavg(clients, server, args.num_rounds, args.local_epoch, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedavg_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -47,9 +47,9 @@ def process_fedprox(clients, server, mu):
     print("Running FedProx ...")
     frame = run_fedprox(clients, server, args.num_rounds, args.local_epoch, mu, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -85,6 +85,8 @@ if __name__ == '__main__':
                         help='The input path of data.')
     parser.add_argument('--outbase', type=str, default='./outputs/raw',
                         help='The base path for outputting.')
+    parser.add_argument('--exp_num', type=int, default=0,
+                        help='Experiment number.')
     parser.add_argument('--repeat', help='index of repeating;',
                         type=int, default=None)
     parser.add_argument('--delta', help='Louvain parameter;',
@@ -119,7 +121,7 @@ if __name__ == '__main__':
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.dropping_method}-dropout{args.dropout}')
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
@@ -152,6 +154,9 @@ if __name__ == '__main__':
     init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")
 
-    process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.local_epoch)
-    process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
-    process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
+    if args.algo == 'selftrain':
+        process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.local_epoch)
+    elif args.algo == 'fedavg':
+        process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
+    else:
+        process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
