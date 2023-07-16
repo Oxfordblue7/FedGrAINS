@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch_sparse import SparseTensor, set_diag
 from torch_geometric.typing import Adj
-from torch_geometric.nn import GCNConv, global_add_pool, SAGEConv, GATConv
+from torch_geometric.nn import GCNConv, SAGEConv, GATConv
 from torch_geometric.utils import remove_self_loops, add_self_loops, degree
 import random
 
@@ -54,11 +54,10 @@ class serverGAT(torch.nn.Module):
             self.graph_convs.append(GATConv(nhid, nhid))
 
 class serverGCN(torch.nn.Module):
-    def __init__(self, nlayer, nhid):
+    def __init__(self, nlayer, nhid, nfeat):
         super(serverGCN, self).__init__()
-        self.graph_convs = torch.nn.ModuleList()
-        for l in range(nlayer - 1):
-            self.graph_convs.append(GCNConv(nhid, nhid))
+        self.conv1 = GCNConv(nfeat, nhid)
+        self.conv2 = GCNConv(nhid, nhid)
 
 """
 Client Models
@@ -95,22 +94,17 @@ class GCN(torch.nn.Module):
         self.num_layers = nlayer
         self.nclass = nclass
 
-        self.pre = torch.nn.Sequential(torch.nn.Linear(nfeat, nhid))
-
-        self.graph_convs = torch.nn.ModuleList()
-
-        for l in range(nlayer - 1):
-            self.graph_convs.append(GCNConv(nhid, nhid))
-
-        self.post = torch.nn.Sequential(torch.nn.Linear(nhid, nclass))
+        self.conv1 = GCNConv(nfeat, nhid)
+        self.conv2 = GCNConv(nhid, nhid)
+        self.post = torch.nn.Linear(nhid, nclass)
 
     def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
         if self.training:
             x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
-        x = self.pre(x)
-        for i in range(len(self.graph_convs)):
-            x = self.graph_convs[i](x, edge_index)
-            x = F.relu(x)
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index)
+        x = F.relu(x)
         x = self.post(x)
         return F.log_softmax(x, dim=1)
 
@@ -129,7 +123,7 @@ class SAGE(torch.nn.Module):
 
         self.graph_convs = torch.nn.ModuleList()
 
-        for l in range(nlayer - 1):
+        for l in range(nlayer):
             self.graph_convs.append(SAGEConv(nhid, nhid))
 
         self.post = torch.nn.Sequential(torch.nn.Linear(nhid, nclass))

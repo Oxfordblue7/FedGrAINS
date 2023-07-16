@@ -29,7 +29,6 @@ class Server():
             if 'graph_convs' in k:
                 self.W[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
 
-
     def min_cut(self, similarity, idc):
         g = nx.Graph()
         for i in range(len(similarity)):

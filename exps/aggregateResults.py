@@ -19,10 +19,10 @@ def _aggregate(inpath, outpath, filename):
 
 def average_aggregate_all(args):
     algos = ['fedavg_NA','fedavg_DropEdge', f'fedprox_mu{args.mu}_NA', f'fedprox_mu{args.mu}_DropEdge']
-    dfs = pd.DataFrame(index=algos, columns=['avg. of test_accuracy_mean', 'avg. of test_accuracy_std'])
+    dfs = pd.DataFrame(index=algos, columns=['avg. of val_accuracy_mean', 'avg. of val_accuracy_std', 'avg. of test_accuracy_mean', 'avg. of test_accuracy_std'])
     for algo in algos:
         df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_{args.dropout}_GC.csv'), header=0, index_col=0)
-        df = df[['test_acc_mean', 'test_acc_std']]
+        df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std']]
         dfs.loc[algo] = list(df.mean())
         print(algo)
 

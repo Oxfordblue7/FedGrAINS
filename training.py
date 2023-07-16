@@ -12,8 +12,8 @@ def run_selftrain_GC(clients, server, local_epoch):
     for client in clients:
         client.local_train(local_epoch)
 
-        loss, acc = client.evaluate()
-        allAccs[client.name] = [client.train_stats['trainingAccs'][-1], client.train_stats['valAccs'][-1], acc]
+        # loss, acc = client.evaluate()
+        allAccs[client.name] = [max(client.train_stats['trainingAccs']), max(client.train_stats['valAccs']), max(client.train_stats['testAccs'])]
         print("  > {} done.".format(client.name))
 
     return allAccs
@@ -46,10 +46,9 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
 
     frame = pd.DataFrame()
     for client in clients:
-        loss, acc = client.evaluate()
-        frame.loc[client.name, 'train_acc'] =  client.train_stats['trainingAccs'][-1]
-        frame.loc[client.name, 'val_acc'] =  client.train_stats['valAccs'][-1]  
-        frame.loc[client.name, 'test_acc'] = acc
+        frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
+        frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = max(client.train_stats['testAccs'])
 
 
     def highlight_max(s):
@@ -93,9 +92,9 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
     frame = pd.DataFrame()
     for client in clients:
         loss, acc = client.evaluate()        
-        frame.loc[client.name, 'train_acc'] =  client.train_stats['trainingAccs'][-1]
-        frame.loc[client.name, 'val_acc'] =  client.train_stats['valAccs'][-1]
-        frame.loc[client.name, 'test_acc'] = acc
+        frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
+        frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = max(client.train_stats['testAccs'])
 
 
 

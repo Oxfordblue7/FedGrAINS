@@ -29,7 +29,7 @@ class Client_GC():
     def download_from_server(self, server):
         self.gconvNames = server.W.keys()
         for k in server.W:
-                self.W[k].data = server.W[k].data.clone()
+            self.W[k].data = server.W[k].data.clone()
 
     def cache_weights(self):
         for name in self.W.keys():
@@ -124,14 +124,13 @@ def train_gc(model, name, dataloader, dropout, optimizer, local_epoch, device):
     model.to(device)
     for epoch in range(local_epoch):
         model.train()
-    for _,batch in enumerate(dataloader):
-        optimizer.zero_grad()
-        batch.to(device)
-        pred = model(batch.x, batch.edge_index, dropout)
-        loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask])
-        loss.backward()
-        optimizer.step()
-        
+        for _,batch in enumerate(dataloader):
+            optimizer.zero_grad()
+            batch.to(device)
+            pred = model(batch.x, batch.edge_index, dropout)
+            loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask])
+            loss.backward()
+            optimizer.step()
             
         total_loss, acc = eval_gc(model, dataloader, batch.train_mask,  device)
         loss_v, acc_v = eval_gc(model, dataloader,batch.val_mask , device)
@@ -156,7 +155,6 @@ def train_gc(model, name, dataloader, dropout, optimizer, local_epoch, device):
 def eval_gc(model, loader, mask, device):
     model.eval()
 
-
     with torch.no_grad():
         targets, preds, lss = [], [], []
         for batch in loader:
@@ -174,7 +172,6 @@ def eval_gc(model, loader, mask, device):
         if targets.size(0) == 0: return  np.mean(lss) , 1.0
 
         preds = torch.stack(preds).view(targets.size(0) , -1 )
-
         preds = preds.max(1)[1]
         acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
         return np.mean(lss) , acc
@@ -198,22 +195,20 @@ def train_gc_prox(model, dataloader, dropout, optimizer, local_epoch, device, gc
             batch.to(device)
             optimizer.zero_grad()
             pred = model(batch.x, batch.edge_index, dropout)
-            label = batch.y
             loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask]) + mu / 2. * _prox_term(model, gconvNames, Wt)
             loss.backward()
             optimizer.step()
                 
-                
-            total_loss, acc = eval_gc(model, dataloader, batch.train_mask, device)
-            loss_v, acc_v = eval_gc(model, dataloader, batch.val_mask,  device)
-            loss_tt, acc_tt = eval_gc(model, dataloader, batch.test_mask, device)
+        total_loss, acc = eval_gc_prox(model, dataloader, batch.train_mask, device, gconvNames,mu,Wt)
+        loss_v, acc_v = eval_gc_prox(model, dataloader, batch.val_mask,  device, gconvNames,mu,Wt)
+        loss_tt, acc_tt = eval_gc_prox(model, dataloader, batch.test_mask, device, gconvNames,mu,Wt)
 
-            losses_train.append(total_loss)
-            accs_train.append(acc)
-            losses_val.append(loss_v)
-            accs_val.append(acc_v)
-            losses_test.append(loss_tt)
-            accs_test.append(acc_tt)
+        losses_train.append(total_loss)
+        accs_train.append(acc)
+        losses_val.append(loss_v)
+        accs_val.append(acc_v)
+        losses_test.append(loss_tt)
+        accs_test.append(acc_tt)
 
         convGradsNorm.append(calc_gradsNorm(gconvNames, Ws))
 

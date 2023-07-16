@@ -63,21 +63,21 @@ if __name__ == '__main__':
                         help='number of rounds to simulate;')
     parser.add_argument('--local_epoch', type=int, default=1,
                         help='number of local epochs;')
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--lr', type=float, default=1e-3,
                         help='learning rate for inner solver;')
-    parser.add_argument('--weight_decay', type=float, default=5e-4,
+    parser.add_argument('--weight_decay', type=float, default=1e-6,
                         help='Weight decay (L2 loss on parameters).')
-    parser.add_argument('--mu', type=float, default=1e-2,
+    parser.add_argument('--mu', type=float, default=1e-3,
                         help='FedProx  regularization parameter.')
-    parser.add_argument('--nlayer', type=int, default=3,
+    parser.add_argument('--nlayer', type=int, default=2,
                         help='Number of GNN layers')
-    parser.add_argument('--hidden', type=int, default=64,
+    parser.add_argument('--hidden', type=int, default=128,
                         help='Number of hidden units.')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
                     help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
-    parser.add_argument('--batch_size', type=int, default=128,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
@@ -89,8 +89,6 @@ if __name__ == '__main__':
                         help='Experiment number.')
     parser.add_argument('--repeat', help='index of repeating;',
                         type=int, default=None)
-    parser.add_argument('--delta', help='Louvain parameter;',
-                        type=int, default=20)
     parser.add_argument('--dataset', help='specify the dataset',
                         type=str, default='Cora')
     parser.add_argument('--model', help='specify the model',
@@ -139,7 +137,7 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData,num_classes = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, delta = args.delta, batchSize=args.batch_size,
+    splitedData,num_classes = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
                                                       convert_x=args.convert_x, seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
