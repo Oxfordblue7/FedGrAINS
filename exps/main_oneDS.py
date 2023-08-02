@@ -28,7 +28,6 @@ def process_selftrain(clients, server, local_epoch):
     df.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
-
 def process_fedavg(clients, server):
     print("\nDone setting up FedAvg devices.")
 
@@ -54,6 +53,7 @@ def process_fedprox(clients, server, mu):
     print(f"Wrote to file: {outfile}")
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', type=str, default='gpu',
                         help='CPU / GPU device.')
@@ -67,7 +67,7 @@ if __name__ == '__main__':
                         help='learning rate for inner solver;')
     parser.add_argument('--weight_decay', type=float, default=1e-6,
                         help='Weight decay (L2 loss on parameters).')
-    parser.add_argument('--mu', type=float, default=1e-3,
+    parser.add_argument('--mu', type=float, default=1e-2,
                         help='FedProx  regularization parameter.')
     parser.add_argument('--nlayer', type=int, default=2,
                         help='Number of GNN layers')
@@ -101,7 +101,6 @@ if __name__ == '__main__':
                         type=bool, default=False)
     parser.add_argument('--num_clients', help='number of clients',
                         type=int, default=10)
-
     parser.add_argument('--seq_length', help='the length of the gradient norm sequence',
                         type=int, default=5)
     try:
@@ -109,13 +108,7 @@ if __name__ == '__main__':
     except IOError as msg:
         parser.error(str(msg))
 
-    seed_dataSplit = 123
-
-    # set seeds
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    torch.cuda.manual_seed(args.seed)
+    seed_dataSplit = 1234
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -138,7 +131,7 @@ if __name__ == '__main__':
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
     splitedData,num_classes = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
-                                                      convert_x=args.convert_x, seed=seed_dataSplit, overlap=args.overlap)
+                                                       seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
     # save statistics of data on clients
@@ -148,6 +141,10 @@ if __name__ == '__main__':
     #     outf = os.path.join(outpath, "repeats", f'{args.repeat}_stats_trainData{suffix}.csv')
     # df_stats.to_csv(outf)
     # print(f"Wrote to {outf}")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
 
     init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
     print("\nDone setting up devices.")

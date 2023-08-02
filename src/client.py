@@ -120,10 +120,24 @@ def calc_gradsNorm(gconvNames, Ws):
 
 def train_gc(model, name, dataloader, dropout, optimizer, local_epoch, device):
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
-    model.train()
+
+
+    total_loss, acc = eval_gc(model, dataloader, batch.train_mask,  device)
+    loss_v, acc_v = eval_gc(model, dataloader,batch.val_mask , device)
+    loss_tt, acc_tt = eval_gc(model, dataloader, batch.test_mask, device)
+
+    #After one epoch 
+    losses_train.append(total_loss)
+    accs_train.append(acc)
+    losses_val.append(loss_v)
+    accs_val.append(acc_v)
+    losses_test.append(loss_tt)
+    accs_test.append(acc_tt)
+    
     model.to(device)
     for epoch in range(local_epoch):
         model.train()
+        #Mini-batch loop
         for _,batch in enumerate(dataloader):
             optimizer.zero_grad()
             batch.to(device)
@@ -188,6 +202,8 @@ def _prox_term(model, gconvNames, Wt):
 def train_gc_prox(model, dataloader, dropout, optimizer, local_epoch, device, gconvNames, Ws, mu, Wt):
     losses_train, accs_train, losses_val, accs_val, losses_test, accs_test = [], [], [], [], [], []
     convGradsNorm = []
+    model.train()
+    model.to(device)
     for epoch in range(local_epoch):
         model.train()
         
@@ -203,6 +219,7 @@ def train_gc_prox(model, dataloader, dropout, optimizer, local_epoch, device, gc
         loss_v, acc_v = eval_gc_prox(model, dataloader, batch.val_mask,  device, gconvNames,mu,Wt)
         loss_tt, acc_tt = eval_gc_prox(model, dataloader, batch.test_mask, device, gconvNames,mu,Wt)
 
+        #After one epoch (for round 1 )
         losses_train.append(total_loss)
         accs_train.append(acc)
         losses_val.append(loss_v)

@@ -54,11 +54,11 @@ class serverGAT(torch.nn.Module):
             self.graph_convs.append(GATConv(nhid, nhid))
 
 class serverGCN(torch.nn.Module):
-    def __init__(self, nlayer, nhid, nfeat):
+    def __init__(self, nlayer, nhid, nfeat, nclass):
         super(serverGCN, self).__init__()
         self.conv1 = GCNConv(nfeat, nhid)
         self.conv2 = GCNConv(nhid, nhid)
-
+        self.post = torch.nn.Linear(nhid, nclass)
 """
 Client Models
 """
@@ -106,10 +106,10 @@ class GCN(torch.nn.Module):
         x = self.conv2(x, edge_index)
         x = F.relu(x)
         x = self.post(x)
-        return F.log_softmax(x, dim=1)
+        return x
 
     def loss(self, pred, label):
-        return F.nll_loss(pred, label)
+        return F.cross_entropy(pred, label)
 
 class SAGE(torch.nn.Module):
     def __init__(self, nfeat, nhid, nclass, nlayer, dropping_method: str = "DropEdge"):
@@ -136,8 +136,8 @@ class SAGE(torch.nn.Module):
             x = self.graph_convs[i](x, edge_index)
             x = F.relu(x)
         x = self.post(x)
-        return F.log_softmax(x, dim=1)
+        return x
 
     def loss(self, pred, label):
-        return F.nll_loss(pred, label)
+        return F.cross_entropy(pred, label)
     

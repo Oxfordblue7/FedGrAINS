@@ -34,6 +34,7 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         if c_round == 1:
             selected_clients = clients
         else:
+            np.random.seed(c_round)
             selected_clients = sampling_fn(clients, frac)
 
         for client in selected_clients:
@@ -48,7 +49,8 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
     for client in clients:
         frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
         frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
-        frame.loc[client.name, 'test_acc'] = max(client.train_stats['testAccs'])
+        m =  max(client.train_stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = client.train_stats['testAccs'][client.train_stats['valAccs'].index(m)]
 
 
     def highlight_max(s):
@@ -58,7 +60,6 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
     fs = frame.style.apply(highlight_max).data
     print(fs)
     return frame
-
 
 def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=None, frac=1.0):
     for client in clients:
@@ -77,6 +78,7 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
         if c_round == 1:
             selected_clients = clients
         else:
+            np.random.seed(c_round)
             selected_clients = sampling_fn(clients, frac)
 
         for client in selected_clients:
@@ -91,12 +93,10 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
 
     frame = pd.DataFrame()
     for client in clients:
-        loss, acc = client.evaluate()        
         frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
         frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
-        frame.loc[client.name, 'test_acc'] = max(client.train_stats['testAccs'])
-
-
+        m =  max(client.train_stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = client.train_stats['testAccs'][client.train_stats['valAccs'].index(m)]
 
     def highlight_max(s):
         is_max = s == s.max()

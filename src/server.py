@@ -18,7 +18,8 @@ class Server():
         for client in selected_clients:
             total_size += client.train_size
         for k in self.W.keys():
-            self.W[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
+            self.W[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W[k].data,\
+                                                                         client.train_size) for client in selected_clients]), dim=0), total_size).clone()
 
     def aggregate_weights_per(self, selected_clients):
         # pass train_size, and weighted aggregate
