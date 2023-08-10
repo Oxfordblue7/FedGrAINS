@@ -7,7 +7,7 @@ import torch
 from torch_geometric.data import Data
 from torch_geometric.utils import to_networkx, degree, subgraph, to_scipy_sparse_matrix
 import torch.nn.functional as F
-from community import community_louvain
+#from community import community_louvain
 import numpy as np
 from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform

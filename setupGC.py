@@ -14,8 +14,6 @@ from sklearn import preprocessing
 from torch_geometric.utils import to_networkx, to_dense_adj, dense_to_sparse
 
 
-from community import community_louvain
-
 from src.models import *
 from src.server import Server
 from src.client import Client_GC

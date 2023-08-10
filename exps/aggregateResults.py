@@ -6,7 +6,7 @@ from pathlib import Path
 def _aggregate(inpath, outpath, filename):
     dfs = []
     for file in os.listdir(inpath):
-
+        print(file)
         if file.endswith(filename):
             dfs.append(pd.read_csv(os.path.join(inpath, file), header=0, index_col=0))
     df = pd.concat(dfs)
@@ -33,7 +33,7 @@ def average_aggregate_all(args):
 def main_aggregate_all_multiDS(args):
     """ multiDS: aggregagte all outputs """
     Path(args.outpath).mkdir(parents=True, exist_ok=True)
-    for filename in ['accuracy_selftrain_GC.csv', 'accuracy_fedavg_GC.csv' , 'accuracy_fedprox_mu'+str(args.mu)+'_GC.csv']:
+    for filename in [ 'accuracy_fedavg_GC.csv' , 'accuracy_fedprox_mu'+str(args.mu)+'_GC.csv']:
         _aggregate(args.inpath, args.outpath, filename)
 
     """ get average performance for all algorithms """
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--numcli', help='specify the number of clients',
                         type=int, default=10, choices=[3,5,7,10,20,30,50])
     parser.add_argument('--mu', help='specify the FedProx parameter',
-                        type=float, default=0.01)
+                        type=float, default=0.001)
     parser.add_argument('--exp_num', type=int, default=0,
                         help='Experiment number.')
     parser.add_argument('--dropout', type=float, default=0.5,

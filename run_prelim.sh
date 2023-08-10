@@ -4,11 +4,11 @@ MODEL=$3
 EXPNUM=$4
 
 #metis
-cd metis-5.1.0
-make config shared=1 prefix=~/.local/
-make install
-export METIS_DLL=~/.local/lib/libmetis.so
-cd -
+# cd metis-5.1.0
+# make config shared=1 prefix=~/.local/
+# make install
+# export METIS_DLL=~/.local/lib/libmetis.so
+# cd -
 
 
 #FedAvg + GNN
