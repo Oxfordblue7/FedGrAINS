@@ -1,34 +1,46 @@
-# FedGDrop
+# FedGDrop - Federated graph Neural Networks with PersonalizedAdaptive Smapling
 
+Official Code Repository for the paper - Personalized Subgraph Federated Learning (ICML 2023): https://arxiv.org/abs/2206.10206.
 
+## Requirement
+- Python 3.9.16
+- PyTorch 2.0.1
+- PyTorch Geometric 2.3.0
+- METIS (for data generation), https://github.com/james77777778/metis_python
 
-## Requirements & Data Preparation
-To install requirements
-```
-conda env create -f fedgdrop.yaml
-```
-Then, METIS (for data generation), please follow  ```https://github.com/james77777778/metis_python```
-
-## Running examples
-* OneDS: Distributing one dataset to a number of clients:
-
-```
-bash run_gcn_cora.sh
-```
-
-* After running the above command lines, the raw results are stored in ```./outputs/raw/```.
-
-* Then, to process the raw results:
-```
-python exps/aggregateResults.py --dataset 'Cora' --numcli 10 --mu 0.01
+## Data Generation
+Following command lines automatically generate the dataset.
+```sh
+$ cd data/generators
+$ python disjoint.py
+$ python overlapping.py
 ```
 
-* Finally, the results are stored in ```./outputs/processed/```.
+## Run 
+Following command lines run the experiments for both FedAvg and our FED-PUB.
+```sh
+$ sh ./scripts/disjoint.sh [gpus] [num_workers]
+$ sh ./scripts/overlapping.sh [gpus] [num_workers]
+```
 
-## Options
-The default values for  parameters parsed to the experiment are given in ```./exps/main_oneDS.py```. Details about some of those parameters are given here.
-* ```--dataset:```  The subgraph FL dataset. Default: 'Cora'. Options: 'Citeseer', 'PubMed', 'MS', .
-* ```--num_rounds:``` The number of rounds for simulation. Default: 200.
-* ```--local_epoch:``` The number of local epochs. Default: 1.
-* ```--hidden:``` The number of hidden units. Default: 64.
-* ```--nlayer:``` The number of GNN layers. Default: 3.
+- `gpus`: specify gpus to use
+- `num workers`: specify the number of workers on gpus (e.g. if your experiment uses 10 clients for every round then use less than or equal to 10 workers). The actual number of workers will be `num_workers` + 1 (one additional worker for a server).
+
+Example
+```sh
+$ sh ./scripts/disjoint.sh 0,1 10
+$ sh ./scripts/overlapping.sh 0,1 10
+```
+
+## Citation
+
+If you found the provided code with our paper useful in your work, we kindly request that you cite our work. </br>
+
+```BibTex
+@article{baek2022personalized,
+  title={Personalized subgraph federated learning},
+  author={Baek, Jinheon and Jeong, Wonyong and Jin, Jiongdao and Yoon, Jaehong and Hwang, Sung Ju},
+  journal={arXiv preprint arXiv:2206.10206},
+  year={2023}
+}
+```
