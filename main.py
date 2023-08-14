@@ -45,6 +45,11 @@ def set_config(args):
         args.n_clss = 6
         args.n_clients = 10 if args.n_clients == None else args.n_clients
         args.base_lr = 0.001 if args.lr == None else args.lr
+    if args.dataset == 'PubMed':
+        args.n_feat = 500
+        args.n_clss = 3
+        args.n_clients = 10 if args.n_clients == None else args.n_clients
+        args.base_lr = 0.001 if args.lr == None else args.lr
 
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     trial = f'{args.dataset}_{args.mode}/dropout_compar/clients_{args.n_clients}/{now}_{args.model}_{args.dropping_method}'
