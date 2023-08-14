@@ -23,11 +23,13 @@ class GCN(nn.Module):
         if self.training:
             x, edge_index = self.drop_block.drop(x, edge_index, self.args.drop_rate)
         x = F.relu(self.conv1(x, edge_index, edge_weight))
-        x = F.dropout(x, training=self.training)
+        if self.dropping_method != "DropEdge":
+            x = F.dropout(x, training=self.training)
         x = self.conv2(x, edge_index, edge_weight)
         if is_proxy == True: return x
         x = F.relu(x)
-        x = F.dropout(x, training=self.training)
+        if self.dropping_method != "DropEdge":
+            x = F.dropout(x, training=self.training)
         x = self.clsif(x)
         return x
 
