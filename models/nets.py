@@ -33,6 +33,37 @@ class GCN(nn.Module):
         x = self.clsif(x)
         return x
 
+class SAGE(torch.nn.Module):
+    def __init__(self, n_feat=10, n_dims=128, n_clss=10, args=None):
+        super().__init__()
+        self.n_feat = n_feat
+        self.n_dims = n_dims
+        self.n_clss = n_clss
+        self.args = args
+        self.dropping_method = self.args.dropping_method
+        self.drop_block = DropBlock(self.dropping_method)
+
+        from torch_geometric.nn import SAGEConv
+        self.conv1 = SAGEConv(self.n_feat, self.n_dims, cached=False)
+        self.conv2 = SAGEConv(self.n_dims, self.n_dims, cached=False)
+        self.clsif = nn.Linear(self.n_dims, self.n_clss)
+
+    def forward(self, data, is_proxy=False):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
+        if self.training:
+            x, edge_index = self.drop_block.drop(x, edge_index, self.args.drop_rate)
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        if self.dropping_method != "DropEdge":
+            x = F.dropout(x, training=self.training)
+        x = self.conv2(x, edge_index, edge_weight)
+        if is_proxy == True: return x
+        x = F.relu(x)
+        if self.dropping_method != "DropEdge":
+            x = F.dropout(x, training=self.training)
+        x = self.clsif(x)
+        return x
+
+
 class MaskedGCN(nn.Module):
     def __init__(self, n_feat=10, n_dims=128, n_clss=10, l1=1e-3, args=None):
         super().__init__()

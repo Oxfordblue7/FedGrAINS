@@ -8,7 +8,8 @@ from modules.federated import ServerModule
 class Server(ServerModule):
     def __init__(self, args, sd, gpu_server):
         super(Server, self).__init__(args, sd, gpu_server)
-        self.model = GCN(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(self.gpu_id)
+        # self.model = GCN(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(self.gpu_id)
+        self.model = SAGE(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(self.gpu_id)
 
     def on_round_begin(self, curr_rnd):
         self.round_begin = time.time()

@@ -10,7 +10,8 @@ class Client(ClientModule):
 
     def __init__(self, args, w_id, g_id, sd):
         super(Client, self).__init__(args, w_id, g_id, sd)
-        self.model = GCN(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(g_id) 
+        # self.model = GCN(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(g_id) 
+        self.model = SAGE(self.args.n_feat, self.args.n_dims, self.args.n_clss, self.args).cuda(g_id) 
         self.parameters = list(self.model.parameters()) 
 
     def init_state(self):
