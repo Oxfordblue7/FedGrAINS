@@ -1,4 +1,4 @@
-# FedGDrop - Federated graph Neural Networks with PersonalizedAdaptive Smapling
+# FedGDrop - Federated Graph Neural Networks with Personalized Adaptive Sampling
 
 Official Code Repository for the paper - Personalized Subgraph Federated Learning (ICML 2023): https://arxiv.org/abs/2206.10206.
 
