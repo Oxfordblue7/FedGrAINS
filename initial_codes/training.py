@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-def run_selftrain_GC(clients, server, local_epoch):
+def run_selftrain_nC(clients, server, local_epoch):
     # all clients are initialized with the same weights
     for client in clients:
         client.download_from_server(server)

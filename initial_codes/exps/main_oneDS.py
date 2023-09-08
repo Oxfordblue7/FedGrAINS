@@ -11,13 +11,13 @@ lib_dir = (Path(__file__).parent / "..").resolve()
 if str(lib_dir) not in sys.path:
     sys.path.insert(0, str(lib_dir))
 
-import setupGC
+import setup_devices
 from training import *
 
 def process_selftrain(clients, server, local_epoch):
     print("Self-training ...")
     df = pd.DataFrame()
-    allAccs = run_selftrain_GC(clients, server, local_epoch)
+    allAccs = run_selftrain_NC(clients, server, local_epoch)
     for k, v in allAccs.items():
         df.loc[k, [f'train_acc', f'val_acc', f'test_acc']] = v
     print(df)
@@ -130,7 +130,8 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData,num_classes = setupGC.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
+    # TODO: load daved partitioned data
+    splitedData, num_features, num_classes = setup_devices.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
                                                        seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    init_clients, init_server, init_idx_clients = setupGC.setup_devices(splitedData,num_classes, args)
+    init_clients, init_server, init_idx_clients = setup_devices.setup_devices(splitedData, num_features, num_classes, args)
     print("\nDone setting up devices.")
 
     if args.algo == 'selftrain':
