@@ -46,6 +46,7 @@ def _split_train(data, train_ratio = 0.2):
     data.val_mask[val_indices] = True
     return data
 
+# TODO: modify to load saved partitioned data directly
 def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=False):
     random.seed(seed)
     np.random.seed(seed)
@@ -105,31 +106,30 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
             test_mask = client_test_mask
         )
         assert torch.sum(client_train_mask).item() > 0
+        # TODO: the train size should count only the nodes/edges with training mask
         print(f'client_id: {client_id}, iid, n_train_node: {client_num_nodes}, n_train_edge: {client_num_edges}')
 
         #Generate dataloaders
         #Couldnt run Cora with mini-batching
         dataloader =  DataLoader([client_data], batch_size=batchSize, shuffle=False)
-        splitedData[ds] = (dataloader,num_features, num_classes, client_num_nodes)
+        splitedData[ds] = (dataloader, client_num_nodes)
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
-    return splitedData, num_classes
+    return splitedData, num_features, num_classes
 
-def setup_devices(splitedData, num_classes, args):
+def setup_devices(splitedData, num_features, num_classes, args):
     idx_clients = {}
     clients = []
-    num_node_features = None
-    num_graph_labels = None
     for idx, ds in enumerate(splitedData.keys()):
         idx_clients[idx] = ds
-        dataloader, num_node_features, num_graph_labels, train_size = splitedData[ds]
-        cmodel_gc = getattr(sys.modules[__name__], args.model)(num_node_features, args.hidden, num_graph_labels, args.nlayer, args.dropping_method)
-        optimizer = torch.optim.Adam(cmodel_gc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-        clients.append(Client_GC(cmodel_gc, idx, ds, train_size, dataloader, optimizer, args))
+        dataloader, train_size = splitedData[ds]
+        cmodel_nc = getattr(sys.modules[__name__], args.model)(args.nlayer, num_features, args.hidden, num_classes, args.dropping_method, args.drop_rate)
+        optimizer = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        clients.append(Client_GC(cmodel_nc, idx, ds, dataloader, train_size, optimizer, args))
 
     #Create server model
-    smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nhid=args.hidden, \
-                                                                 nfeat = num_node_features, nclass = num_graph_labels )
+    smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nfeat = num_features,
+                                                                 nhid=args.hidden, nclass = num_classes )
     server = Server(smodel, args.device)
 
     return clients, server, idx_clients
