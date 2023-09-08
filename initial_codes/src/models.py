@@ -40,102 +40,102 @@ class DropBlock:
 Server Models
 """
 class serverSAGE(torch.nn.Module):
-    def __init__(self, nlayer, nhid):
+    def __init__(self, nlayer, nfeat, nhid, ncls):
         super(serverSAGE, self).__init__()
         self.graph_convs = torch.nn.ModuleList()
+        self.graph_convs.append(SAGEConv(nfeat, nhid))
         for l in range(nlayer - 1):
             self.graph_convs.append(SAGEConv(nhid, nhid))
+        self.classifier = torch.nn.Linear(nhid, ncls)
 
-class serverGAT(torch.nn.Module):
-    def __init__(self, nlayer, nhid):
-        super(serverGAT, self).__init__()
-        self.graph_convs = torch.nn.ModuleList()
-        for l in range(nlayer - 1):
-            self.graph_convs.append(GATConv(nhid, nhid))
+# class serverGAT(torch.nn.Module):
+#     def __init__(self, nlayer, nfeat, nhid, ncls):
+#         super(serverGAT, self).__init__()
+#         self.graph_convs = torch.nn.ModuleList()
+#         self.graph_convs.append(GATConv(nfeat, nhid))
+#         for l in range(nlayer - 1):
+#             self.graph_convs.append(GATConv(nhid, nhid))
+#         self.classifier = torch.nn.Linear(nhid, ncls)
 
 class serverGCN(torch.nn.Module):
-    def __init__(self, nlayer, nhid, nfeat, nclass):
+    def __init__(self, nlayer, nfeat, nhid, ncls):
         super(serverGCN, self).__init__()
-        self.conv1 = GCNConv(nfeat, nhid)
-        self.conv2 = GCNConv(nhid, nhid)
-        self.post = torch.nn.Linear(nhid, nclass)
+        self.graph_convs = torch.nn.ModuleList()
+        self.graph_convs.append(GCNConv(nfeat, nhid))
+        for l in range(nlayer - 1):
+            self.graph_convs.append(GCNConv(nhid, nhid))
+        self.classifier = torch.nn.Linear(nhid, ncls)
+
 """
 Client Models
 """
-class GAT(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, dropping_method: str = "DropEdge", heads=2):
-        super(GAT, self).__init__()
-        self.dropping_method = dropping_method
-        self.drop_block = DropBlock(dropping_method)
-        self.conv1 = GATConv(in_channels, heads, heads=heads)
-        # On the Pubmed dataset, use heads=8 in conv2.
-        self.conv2 = GATConv(heads * heads, out_channels, heads=1, concat=False, dropout=0.6)
-        self.nclass = out_channels
-
-    def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
-
-        if self.training:
-            x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
-
-        x = F.elu(self.conv1(x, edge_index))
-        x = self.conv2(x, edge_index)
-        return F.log_softmax(x, dim=-1)
-
-    def loss(self, pred, label):
-        return F.nll_loss(pred, label)
+# class GAT(torch.nn.Module):
+#     def __init__(self, in_channels, out_channels, dropping_method: str = "DropEdge", heads=2):
+#         super(GAT, self).__init__()
+#         self.dropping_method = dropping_method
+#         self.drop_block = DropBlock(dropping_method)
+#
+#         self.conv1 = GATConv(in_channels, heads, heads=heads)
+#         # On the Pubmed dataset, use heads=8 in conv2.
+#         self.conv2 = GATConv(heads * heads, out_channels, heads=1, concat=False, dropout=0.6)
+#         self.nclass = out_channels
+#
+#     def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
+#
+#         if self.training:
+#             x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
+#
+#         x = F.elu(self.conv1(x, edge_index))
+#         x = self.conv2(x, edge_index)
+#         return F.log_softmax(x, dim=-1)
+#
+#     def loss(self, pred, label):
+#         return F.nll_loss(pred, label)
 
 class GCN(torch.nn.Module):
-    def __init__(self, nfeat, nhid, nclass, nlayer, dropping_method: str = "DropEdge"):
+    def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0):
         super(GCN, self).__init__()
         self.dropping_method = dropping_method
         self.drop_block = DropBlock(dropping_method)
+        self.drop_rate = drop_rate
         self.edge_weight = None
+        self.graph_convs = torch.nn.ModuleList()
+        self.graph_convs.append(GCNConv(nfeat, nhid))
+        for l in range(nlayer - 1):
+            self.graph_convs.append(GCNConv(nhid, nhid))
+        self.classifier = torch.nn.Linear(nhid, ncls)
 
-        self.num_layers = nlayer
-        self.nclass = nclass
-
-        self.conv1 = GCNConv(nfeat, nhid)
-        self.conv2 = GCNConv(nhid, nhid)
-        self.post = torch.nn.Linear(nhid, nclass)
-
-    def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
+    def forward(self, x: Tensor, edge_index: Adj):
         if self.training:
-            x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = self.conv2(x, edge_index)
-        x = F.relu(x)
-        x = self.post(x)
+            x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
+        for l in range(len(self.graph_convs)):
+            x = self.graph_convs[l](x, edge_index)
+            x = F.relu(x)
+        x = self.classifier(x)
         return x
 
     def loss(self, pred, label):
         return F.cross_entropy(pred, label)
 
 class SAGE(torch.nn.Module):
-    def __init__(self, nfeat, nhid, nclass, nlayer, dropping_method: str = "DropEdge"):
+    def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0):
         super(SAGE, self).__init__()
         self.dropping_method = dropping_method
         self.drop_block = DropBlock(dropping_method)
-        self.num_layers = nlayer
-        self.nclass = nclass
-
-        self.pre = torch.nn.Sequential(torch.nn.Linear(nfeat, nhid))
-
-        self.graph_convs = torch.nn.ModuleList()
-
-        for l in range(nlayer):
+        self.drop_rate = drop_rate
+        self.nlayer = nlayer
+        self.graph_convs.append(SAGEConv(nfeat, nhid))
+        for l in range(nlayer - 1):
             self.graph_convs.append(SAGEConv(nhid, nhid))
+        self.classifier = torch.nn.Linear(nhid, ncls)
 
-        self.post = torch.nn.Sequential(torch.nn.Linear(nhid, nclass))
-
-    def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
+    def forward(self, x: Tensor, edge_index: Adj):
         if self.training:
-            x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
-        x = self.pre(x)
-        for i in range(len(self.graph_convs)):
-            x = self.graph_convs[i](x, edge_index)
+            x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
+        for l in range(len(self.graph_convs)):
+            x = self.graph_convs[l](x, edge_index)
             x = F.relu(x)
-        x = self.post(x)
+        x = self.classifier(x)
         return x
 
     def loss(self, pred, label):
