@@ -87,7 +87,7 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
 
         for client in selected_clients:
             client.local_train_prox(local_epoch, mu)
-            testLoss, testAcc = client.evaluate_prox()
+            testLoss, testAcc = client.evaluate_prox(mu)
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testAcc)
 
