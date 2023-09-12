@@ -11,7 +11,9 @@ def run_selftrain_NC(clients, server, local_epoch):
     for client in clients:
         client.local_train(local_epoch)
 
-        # loss, acc = client.evaluate()
+        loss, acc = client.evaluate()
+        client.stats['testLosses'].append(loss)
+        client.stats['testAccs'].append(acc)
         allAccs[client.name] = [max(client.train_stats['trainingAccs']), max(client.train_stats['valAccs']), max(client.train_stats['testAccs'])]
         print("  > {} done.".format(client.name))
 
@@ -39,6 +41,9 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         for client in selected_clients:
             # only get weights of graphconv layers
             client.local_train(local_epoch)
+            testLoss, testAcc = client.evaluate()
+            client.stats['testLosses'].append(testLoss)
+            client.stats['testAccs'].append(testAcc)
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -46,10 +51,11 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
 
     frame = pd.DataFrame()
     for client in clients:
-        frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
-        frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
-        m =  max(client.train_stats['valAccs'])
-        frame.loc[client.name, 'test_acc'] = client.train_stats['testAccs'][client.train_stats['valAccs'].index(m)]
+        print(client.stats['trainingAccs'])
+        frame.loc[client.name, 'train_acc'] =  max(client.stats['trainingAccs'])
+        frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
+        m =  max(client.stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = client.stats['testAccs'][client.stats['valAccs'].index(m)]
 
 
     def highlight_max(s):
@@ -82,6 +88,9 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
 
         for client in selected_clients:
             client.local_train_prox(local_epoch, mu)
+            testLoss, testAcc = client.evaluate_prox()
+            client.stats['testLosses'].append(testLoss)
+            client.stats['testAccs'].append(testAcc)
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -92,10 +101,10 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
 
     frame = pd.DataFrame()
     for client in clients:
-        frame.loc[client.name, 'train_acc'] =  max(client.train_stats['trainingAccs'])
-        frame.loc[client.name, 'val_acc'] =  max(client.train_stats['valAccs'])
-        m =  max(client.train_stats['valAccs'])
-        frame.loc[client.name, 'test_acc'] = client.train_stats['testAccs'][client.train_stats['valAccs'].index(m)]
+        frame.loc[client.name, 'train_acc'] =  max(client.stats['trainingAccs'])
+        frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
+        m =  max(client.stats['valAccs'])
+        frame.loc[client.name, 'test_acc'] = client.stats['testAccs'][client.stats['valAccs'].index(m)]
 
     def highlight_max(s):
         is_max = s == s.max()
