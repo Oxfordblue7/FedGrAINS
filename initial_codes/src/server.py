@@ -102,3 +102,9 @@ def reduce_add_average(targets, sources, total_size):
         for name in target:
             tmp = torch.div(torch.sum(torch.stack([torch.mul(source[0][name].data, source[1]) for source in sources]), dim=0), total_size).clone()
             target[name].data += tmp
+
+
+def torch_save(base_dir, filename, data):
+    os.makedirs(base_dir, exist_ok=True)
+    fpath = os.path.join(base_dir, filename)    
+    torch.save(data, fpath)

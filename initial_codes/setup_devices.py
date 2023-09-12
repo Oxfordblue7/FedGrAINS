@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import sys
 import torch
-import metispy as metis
+# import metispy as metis
 import torch.nn.functional as F
 import torch_geometric.transforms as T
 from torch_geometric.data import Data
@@ -16,8 +16,8 @@ from torch_geometric.utils import to_networkx, to_dense_adj, dense_to_sparse
 
 from src.models import *
 from src.server import Server
-from src.client import Client_GC
-from src.utils import LargestConnectedComponents
+from src.client import Client_NC
+from src.utils import LargestConnectedComponents, torch_save, torch_load
 
 def _metis_graph_cut(g, num_owners):
     G = to_networkx(g)
@@ -47,71 +47,47 @@ def _split_train(data, train_ratio = 0.2):
     return data
 
 # TODO: modify to load saved partitioned data directly
+# TODO: Create a separate data generation script to generate partitions
 def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=False):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if data in ["Cora", "Citeseer", "Pubmed"]:
-        pyg_dataset = Planetoid(f"{datapath}/Planetoid", data, transform=T.Compose([LargestConnectedComponents(), T.NormalizeFeatures()]))
-        num_classes= pyg_dataset.num_classes
-        num_features  = pyg_dataset.num_features
-        dataset = pyg_dataset[0]
-    elif data in ['Computers', 'Photo']:
-        pyg_dataset = Amazon(f"{datapath}/{data}", data, transform=T.Compose([T.NormalizeFeatures()]))
-        num_classes= pyg_dataset.num_classes
-        num_features  = pyg_dataset.num_features
-        dataset = pyg_dataset[0]
-        dataset.train_mask, dataset.val_mask, dataset.test_mask \
-            = torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool)
+
+    # random.seed(seed)
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
+    if data  == "Cora":
+        num_classes, num_features = 7, 1433 
+    elif data  == "CiteSeer":
+        num_classes, num_features = 6, 3703
+    elif data  == "PubMed":
+        num_classes, num_features = 3, 500
+    elif data  == 'Computers':
+        num_classes, num_features = 10, 767
+    elif data  == 'Photo':
+        num_classes, num_features = 8,745
     else:
         #MS_academic
         raise Exception("MS Academic not yet implemented!")
 
-    #Train-val-test split
-    #Train ratio is 0.2 in accordance with FedPUB
-    dataset = _split_train(dataset)
+    # #Train-val-test split
+    # #Train ratio is 0.2 in accordance with FedPUB
+    # dataset = _split_train(dataset)
 
-    #Disjoint metis partitioning 
-    _ , membership =  _metis_graph_cut(dataset, num_client)
+    # #Disjoint metis partitioning 
+    # _ , membership =  _metis_graph_cut(dataset, num_client)
     
     splitedData = {}
-    df = pd.DataFrame()
-    adj = to_dense_adj(dataset.edge_index)[0]
+    # df = pd.DataFrame()
+    # adj = to_dense_adj(dataset.edge_index)[0]
+
     for client_id in range(num_client):
         ds = f'{client_id}-{data}'
-
-        #Distribute partition to the user
-        client_indices = np.where(np.array(membership) == client_id)[0]
-        client_indices = list(client_indices)
-        client_num_nodes = len(client_indices)
-
-        client_edge_index = []
-        client_adj = adj[client_indices][:, client_indices]
-        client_edge_index, _ = dense_to_sparse(client_adj)
-        client_edge_index = client_edge_index.T.tolist()
-        client_num_edges = len(client_edge_index)
-
-        client_edge_index = torch.tensor(client_edge_index, dtype=torch.long)
-        client_x = dataset.x[client_indices]
-        client_y = dataset.y[client_indices]
-        client_train_mask = dataset.train_mask[client_indices]
-        client_val_mask = dataset.val_mask[client_indices]
-        client_test_mask = dataset.test_mask[client_indices]
-        client_data = Data(
-            x = client_x,
-            y = client_y,
-            edge_index = client_edge_index.t().contiguous(),
-            train_mask = client_train_mask,
-            val_mask = client_val_mask,
-            test_mask = client_test_mask
-        )
-        assert torch.sum(client_train_mask).item() > 0
-        # TODO: the train size should count only the nodes/edges with training mask
-        print(f'client_id: {client_id}, iid, n_train_node: {client_num_nodes}, n_train_edge: {client_num_edges}')
-
+        #TODO Get Disjoint or Overlapping argument later
+        partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')['client_data']
+        client_num_nodes = torch.sum(partition.train_mask)
         #Generate dataloaders
         #Couldnt run Cora with mini-batching
-        dataloader =  DataLoader([client_data], batch_size=batchSize, shuffle=False)
+        dataloader =  DataLoader(dataset= [partition], batch_size=batchSize, 
+                                 shuffle=False, pin_memory=False)
+
         splitedData[ds] = (dataloader, client_num_nodes)
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
@@ -123,13 +99,13 @@ def setup_devices(splitedData, num_features, num_classes, args):
     for idx, ds in enumerate(splitedData.keys()):
         idx_clients[idx] = ds
         dataloader, train_size = splitedData[ds]
-        cmodel_nc = getattr(sys.modules[__name__], args.model)(args.nlayer, num_features, args.hidden, num_classes, args.dropping_method, args.drop_rate)
+        cmodel_nc = getattr(sys.modules[__name__], args.model)(args.nlayer, num_features, args.hidden, num_classes, args.dropping_method, args.dropout)
         optimizer = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-        clients.append(Client_GC(cmodel_nc, idx, ds, dataloader, train_size, optimizer, args))
+        clients.append(Client_NC(cmodel_nc, idx, ds, dataloader, train_size, optimizer, args))
 
     #Create server model
     smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nfeat = num_features,
-                                                                 nhid=args.hidden, nclass = num_classes )
+                                                                 nhid=args.hidden, ncls = num_classes )
     server = Server(smodel, args.device)
 
     return clients, server, idx_clients

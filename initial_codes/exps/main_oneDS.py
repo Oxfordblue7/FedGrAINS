@@ -81,7 +81,7 @@ if __name__ == '__main__':
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
-    parser.add_argument('--datapath', type=str, default='./data',
+    parser.add_argument('--datapath', type=str, default='../../datasets',
                         help='The input path of data.')
     parser.add_argument('--outbase', type=str, default='./outputs/raw',
                         help='The base path for outputting.')

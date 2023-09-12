@@ -13,6 +13,16 @@ from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform
 
 
+def torch_save(base_dir, filename, data):
+    os.makedirs(base_dir, exist_ok=True)
+    fpath = os.path.join(base_dir, filename)    
+    torch.save(data, fpath)
+
+def torch_load(base_dir, filename):
+    fpath = os.path.join(base_dir, filename)    
+    return torch.load(fpath, map_location=torch.device('cpu'))
+
+
 def convert_to_nodeDegreeFeatures(graphs):
     graph_infos = []
     maxdegree = 0
