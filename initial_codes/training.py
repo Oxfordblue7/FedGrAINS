@@ -51,7 +51,6 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
 
     frame = pd.DataFrame()
     for client in clients:
-        print(client.stats['trainingAccs'])
         frame.loc[client.name, 'train_acc'] =  max(client.stats['trainingAccs'])
         frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
         m =  max(client.stats['valAccs'])
