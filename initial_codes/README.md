@@ -1,7 +1,5 @@
 # FedGDrop
 
-
-
 ## Requirements & Data Preparation
 To install requirements
 ```
@@ -13,14 +11,14 @@ Then, METIS (for data generation), please follow  ```https://github.com/james777
 * OneDS: Distributing one dataset to a number of clients:
 
 ```
-bash run_gcn_cora.sh
+sh run_prelim.sh 5 Cora SAGE 1 
 ```
 
 * After running the above command lines, the raw results are stored in ```./outputs/raw/```.
 
 * Then, to process the raw results:
 ```
-python exps/aggregateResults.py --dataset 'Cora' --numcli 10 --mu 0.01
+python exps/aggregateResults.py --dataset 'Cora' --model 'SAGE' --numcli 5 --mu 0.01
 ```
 
 * Finally, the results are stored in ```./outputs/processed/```.
