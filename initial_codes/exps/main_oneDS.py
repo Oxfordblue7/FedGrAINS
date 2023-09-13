@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, json
 import argparse
 import random
 import torch
@@ -63,7 +63,7 @@ if __name__ == '__main__':
                         help='number of rounds to simulate;')
     parser.add_argument('--local_epoch', type=int, default=1,
                         help='number of local epochs;')
-    parser.add_argument('--lr', type=float, default=1e-3,
+    parser.add_argument('--lr', type=float, default=1e-2,
                         help='learning rate for inner solver;')
     parser.add_argument('--weight_decay', type=float, default=1e-6,
                         help='Weight decay (L2 loss on parameters).')
@@ -112,10 +112,13 @@ if __name__ == '__main__':
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients/exp_{args.exp_num}')
+    
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
+    with open(outpath +'/params.txt', 'w') as convert_file:
+        convert_file.write(json.dumps(vars(args)))
 
     """ distributed one dataset to multiple clients """
     if not args.convert_x:
@@ -130,7 +133,6 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    # TODO: load daved partitioned data
     splitedData, num_features, num_classes = setup_devices.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
                                                        seed=seed_dataSplit, overlap=args.overlap)
     print("Done")

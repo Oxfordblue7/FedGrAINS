@@ -67,8 +67,8 @@ if __name__ == '__main__':
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
-    args.inpath = f'./outputs/raw/{args.dataset}-{args.numcli}clients/exp_{args.exp_num}/repeats'
-    args.outpath = f'./outputs/processed/{args.dataset}-{args.numcli}clients/exp_{args.exp_num}'
+    args.inpath = f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}/repeats'
+    args.outpath = f'./outputs/processed/{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}'
 
     #     """ multiDS: aggregagte all outputs """
     main_aggregate_prelim(args)
