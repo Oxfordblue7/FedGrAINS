@@ -2,6 +2,7 @@ import os, sys, json
 import argparse
 import random
 import torch
+import wandb
 from pathlib import Path
 import copy
 
@@ -20,11 +21,10 @@ def process_selftrain(clients, server, local_epoch):
     allAccs = run_selftrain_NC(clients, server, local_epoch)
     for k, v in allAccs.items():
         df.loc[k, [f'train_acc', f'val_acc', f'test_acc']] = v
-    print(df)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_selftrain_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     df.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -101,8 +101,6 @@ if __name__ == '__main__':
                         type=bool, default=False)
     parser.add_argument('--num_clients', help='number of clients',
                         type=int, default=10)
-    parser.add_argument('--seq_length', help='the length of the gradient norm sequence',
-                        type=int, default=5)
     try:
         args = parser.parse_args()
     except IOError as msg:
@@ -112,7 +110,12 @@ if __name__ == '__main__':
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    wandb.init( project = 'fedgdrop',
+        name=f'{args.dataset}-{args.num_clients}clients-{args.model}-{args.algo}-{args.dropping_method}' 
+    )
+    wandb.config.update(args)
     
+
     outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
@@ -158,3 +161,4 @@ if __name__ == '__main__':
         process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
     else:
         process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
+    wandb.finish()

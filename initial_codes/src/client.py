@@ -1,4 +1,5 @@
 import torch
+import wandb
 import numpy as np
 
 class Client_NC():
@@ -36,7 +37,7 @@ class Client_NC():
         self.stats['trainingAccs'].append(tr_acc)
         self.stats['valLosses'].append(val_loss)
         self.stats['valAccs'].append(val_acc)
-
+        wandb.log({"trainLoss" : tr_loss, "trainAcc" : tr_acc ,"valLoss" : val_loss, "valAcc" : val_acc  })
 
     def compute_weight_update(self, local_epoch):
         """ For GCFL """
@@ -56,6 +57,8 @@ class Client_NC():
         self.stats['trainingAccs'].append(tr_acc)
         self.stats['valLosses'].append(val_loss)
         self.stats['valAccs'].append(val_acc)
+        wandb.log({"trainLoss" : tr_loss, "trainAcc" : tr_acc ,"valLoss" : val_loss, "valAcc" : val_acc  })
+
 
     def evaluate_prox(self, mu):
         return eval_nc_prox(self.model, self.dataLoader, "test_mask", self.args.device, mu, self.W_old)

@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import wandb
 
 
 def run_selftrain_NC(clients, server, local_epoch):
@@ -14,7 +15,8 @@ def run_selftrain_NC(clients, server, local_epoch):
         loss, acc = client.evaluate()
         client.stats['testLosses'].append(loss)
         client.stats['testAccs'].append(acc)
-        allAccs[client.name] = [max(client.train_stats['trainingAccs']), max(client.train_stats['valAccs']), max(client.train_stats['testAccs'])]
+        wandb.log({'testLoss' : loss, 'testAcc' : acc})
+        allAccs[client.name] = [max(client.stats['trainingAccs']), max(client.stats['valAccs']), max(client.stats['testAccs'])]
         print("  > {} done.".format(client.name))
 
     return allAccs
@@ -44,6 +46,7 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
             testLoss, testAcc = client.evaluate()
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testAcc)
+            wandb.log({'testLoss' : testLoss , 'testAcc' : testAcc})
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -90,6 +93,7 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
             testLoss, testAcc = client.evaluate_prox(mu)
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testAcc)
+            wandb.log({'testLoss' : testLoss, 'testAcc' : testAcc})
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:

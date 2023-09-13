@@ -43,7 +43,7 @@ def main_aggregate_all_multiDS(args):
 def main_aggregate_prelim(args):
     """ multiDS: aggregagte all outputs """
     Path(args.outpath).mkdir(parents=True, exist_ok=True)
-    for filename in [f'accuracy_fedavg_NA_{args.dropout}_GC.csv' , f'accuracy_fedavg_DropEdge_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_NA_{args.dropout}_GC.csv',
+    for filename in [f'accuracy_selftrain_NA_{args.dropout}_GC.csv', f'accuracy_selftrain_DropEdge_{args.dropout}_GC.csv', f'accuracy_fedavg_NA_{args.dropout}_GC.csv' , f'accuracy_fedavg_DropEdge_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_NA_{args.dropout}_GC.csv',
                       f'accuracy_fedprox_mu{args.mu}_DropEdge_{args.dropout}_GC.csv']:
         _aggregate(args.inpath, args.outpath, filename)
 
@@ -63,12 +63,14 @@ if __name__ == '__main__':
                         help='Experiment number.')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
+    parser.add_argument('--model', help='specify the model',
+                        type=str, default='GCN')
     try:
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
-    args.inpath = f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}/repeats'
-    args.outpath = f'./outputs/processed/{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}'
+    args.inpath = f'./outputs/raw/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}/repeats'
+    args.outpath = f'./outputs/processed/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}'
 
     #     """ multiDS: aggregagte all outputs """
     main_aggregate_prelim(args)
