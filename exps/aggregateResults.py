@@ -55,7 +55,7 @@ def main_aggregate_prelim(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', help='specify the dataset',
-                        type=str, default='Cora', choices=['Cora', 'Citeseer', 'PubMed', 'biosncv'])
+                        type=str, default='Cora', choices=['Cora', 'CiteSeer', 'PubMed', 'biosncv'])
     parser.add_argument('--numcli', help='specify the number of clients',
                         type=int, default=10, choices=[3,5,7,10,20,30,50])
     parser.add_argument('--mu', help='specify the FedProx parameter',
