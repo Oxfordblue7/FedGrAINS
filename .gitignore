@@ -7,3 +7,6 @@ __pycache__/*
 *.csv
 *.txt
 */wandb/*
+wandb/*
+evaluations/*
+plots/*
