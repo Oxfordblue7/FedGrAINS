@@ -7,9 +7,8 @@ from torch_geometric.nn import GCNConv, SAGEConv, GATConv
 from torch_geometric.utils import remove_self_loops, add_self_loops, degree
 import random
 
-
 """
-Usified DropBlock Module for Dropout, DropEdge, and DropNode
+Unified DropBlock Module for Dropout, DropEdge, and DropNode
 """
 class DropBlock:
     def __init__(self, dropping_method: str):
@@ -107,10 +106,13 @@ class GCN(torch.nn.Module):
 
     def forward(self, x: Tensor, edge_index: Adj):
         if self.training:
-            x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
+            if self.dropping_method != "Dropout":
+                x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
         for l in range(len(self.graph_convs)):
             x = self.graph_convs[l](x, edge_index)
             x = F.relu(x)
+            if self.dropping_method == "Dropout":
+                x = F.dropout(x, training=self.training)
         x = self.classifier(x)
         return x
 
@@ -124,6 +126,7 @@ class SAGE(torch.nn.Module):
         self.drop_block = DropBlock(dropping_method)
         self.drop_rate = drop_rate
         self.nlayer = nlayer
+        self.graph_convs = torch.nn.ModuleList()
         self.graph_convs.append(SAGEConv(nfeat, nhid))
         for l in range(nlayer - 1):
             self.graph_convs.append(SAGEConv(nhid, nhid))
@@ -131,10 +134,13 @@ class SAGE(torch.nn.Module):
 
     def forward(self, x: Tensor, edge_index: Adj):
         if self.training:
-            x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
+            if self.dropping_method != "Dropout":
+                x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
         for l in range(len(self.graph_convs)):
             x = self.graph_convs[l](x, edge_index)
             x = F.relu(x)
+            if self.dropping_method == "Dropout":
+                x = F.dropout(x, training=self.training)
         x = self.classifier(x)
         return x
 
