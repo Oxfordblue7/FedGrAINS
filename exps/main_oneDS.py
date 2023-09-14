@@ -67,7 +67,7 @@ if __name__ == '__main__':
                         help='learning rate for inner solver;')
     parser.add_argument('--weight_decay', type=float, default=1e-6,
                         help='Weight decay (L2 loss on parameters).')
-    parser.add_argument('--mu', type=float, default=1e-2,
+    parser.add_argument('--mu', type=float, default=1e-3,
                         help='FedProx  regularization parameter.')
     parser.add_argument('--nlayer', type=int, default=2,
                         help='Number of GNN layers')
@@ -81,7 +81,7 @@ if __name__ == '__main__':
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
-    parser.add_argument('--datapath', type=str, default='../../datasets',
+    parser.add_argument('--datapath', type=str, default='../datasets',
                         help='The input path of data.')
     parser.add_argument('--outbase', type=str, default='./outputs/raw',
                         help='The base path for outputting.')
