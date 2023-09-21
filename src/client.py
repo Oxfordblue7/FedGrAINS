@@ -8,7 +8,7 @@ class Client_NC():
         self.id = client_id
         self.name = name
         self.train_size = train_size
-        self.dataLoader = data_loader
+        self.dataLoader = data_loader #This is a dict
         self.optimizer = optimizer
         self.args = args
 
@@ -47,7 +47,7 @@ class Client_NC():
         _subtract(target=self.dW, minuend=self.W, subtrahend=self.W_old)
 
     def evaluate(self):
-        return eval_nc(self.model, self.dataLoader, "test_mask", self.args.device)
+        return eval_nc(self.model, self.dataLoader['tst'], self.args.device)
 
     def local_train_prox(self, local_epoch, mu):
         """ For FedProx """
@@ -59,7 +59,7 @@ class Client_NC():
         
 
     def evaluate_prox(self, mu):
-        return eval_nc_prox(self.model, self.dataLoader, "test_mask", self.args.device, mu, self.W_old)
+        return eval_nc_prox(self.model, self.dataLoader['tst'], self.args.device, mu, self.W_old)
 
 def copy(target, source, keys):
     for name in keys:
@@ -80,19 +80,20 @@ def calc_gradsNorm(gconvNames, Ws):
 def train_nc(model, cli_id, dataloader, optimizer, local_epoch, device):
     losses_train, accs_train, losses_val, accs_val = [], [], [], [] 
     model.to(device)
+    tr_loader, val_loader = dataloader['tr'] , dataloader['val']
     for epoch in range(local_epoch):
         model.train()
         #Mini-batch loop
-        for i, batch in enumerate(dataloader):
+        for i, batch in enumerate(tr_loader):
             optimizer.zero_grad()
             batch.to(device)
             pred = model(batch.x, batch.edge_index)
-            loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask])
+            loss = model.loss(pred, batch.y)
             loss.backward()
             optimizer.step()
 
-        loss_train, acc_train = eval_nc(model, dataloader, "train_mask", device)
-        loss_v, acc_v = eval_nc(model, dataloader, "val_mask", device)
+        loss_train, acc_train = eval_nc(model, tr_loader, device)
+        loss_v, acc_v = eval_nc(model, val_loader, device)
 
         #After one epoch 
         losses_train.append(loss_train)
@@ -107,7 +108,7 @@ def train_nc(model, cli_id, dataloader, optimizer, local_epoch, device):
     return losses_train[-1], accs_train[-1], losses_val[-1],accs_val[-1]
 
 @torch.no_grad()
-def eval_nc(model, loader, mask, device):
+def eval_nc(model, loader, device):
     model.eval()
     with torch.no_grad():
         targets, preds, lss = [], [], []
@@ -116,12 +117,12 @@ def eval_nc(model, loader, mask, device):
             pred = model(batch.x, batch.edge_index)
             
             label = batch.y
-            # TODO: to check the mask is loaded correctly
-            loss = model.loss(pred[batch[mask]], label[batch[mask]])
+            # TODO: to check the mask is loaded correctly (no need for mask rn)
+            loss = model.loss(pred, label)
             total_loss = loss.item()
-            # TODO: to check the mask is loaded correctly
-            preds.append(pred[batch[mask]])
-            targets.append(label[batch[mask]])
+            # TODO: to check the mask is loaded correctly (no need for mask rn)
+            preds.append(pred)
+            targets.append(label)
             lss.append(total_loss)
 
         targets = torch.stack(targets).view(-1)
@@ -131,7 +132,6 @@ def eval_nc(model, loader, mask, device):
         preds = preds.max(1)[1]
         acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
         return np.mean(lss) , acc
-    
     
 def _prox_term(model, Wt):
     prox = torch.tensor(0., requires_grad=True)
@@ -143,19 +143,20 @@ def train_nc_prox(model, cli_id, dataloader, optimizer, local_epoch, device, mu,
     losses_train, accs_train, losses_val, accs_val = [], [], [], [] 
     model.train()
     model.to(device)
+    tr_loader, val_loader = dataloader['tr'] , dataloader['val']
     for epoch in range(local_epoch):
         model.train()
         
-        for batch in dataloader:
+        for batch in tr_loader:
             batch.to(device)
             optimizer.zero_grad()
             pred = model(batch.x, batch.edge_index)
-            loss = model.loss(pred[batch.train_mask], batch.y[batch.train_mask]) + mu / 2. * _prox_term(model, Wt)
+            loss = model.loss(pred, batch.y) + mu / 2. * _prox_term(model, Wt)
             loss.backward()
             optimizer.step()
                 
-        total_loss, acc = eval_nc_prox(model, dataloader, "train_mask", device, mu, Wt)
-        loss_v, acc_v = eval_nc_prox(model, dataloader, "val_mask",  device, mu, Wt)
+        total_loss, acc = eval_nc_prox(model, tr_loader, device, mu, Wt)
+        loss_v, acc_v = eval_nc_prox(model, val_loader, device, mu, Wt)
 
         #After one epoch (for round 1 )
         losses_train.append(total_loss)
@@ -170,7 +171,7 @@ def train_nc_prox(model, cli_id, dataloader, optimizer, local_epoch, device, mu,
     return losses_train[-1], accs_train[-1], losses_val[-1],accs_val[-1]
 
 @torch.no_grad()
-def eval_nc_prox(model, loader, mask, device, mu, Wt):
+def eval_nc_prox(model, loader,  device, mu, Wt):
     model.eval()
     model.to(device)
 
@@ -182,11 +183,11 @@ def eval_nc_prox(model, loader, mask, device, mu, Wt):
             
             label = batch.y
             # TODO: to check the mask is loaded correctly
-            loss = model.loss(pred[batch[mask]], label[batch[mask]]) + mu / 2. * _prox_term(model, Wt)
+            loss = model.loss(pred, label) + mu / 2. * _prox_term(model, Wt)
             total_loss = loss.item()
             # TODO: to check the mask is loaded correctly
-            preds.append(pred[batch[mask]])
-            targets.append(label[batch[mask]])
+            preds.append(pred)
+            targets.append(label)
             lss.append(total_loss)
         
         targets = torch.stack(targets).view(-1)

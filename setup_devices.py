@@ -17,14 +17,7 @@ from torch_geometric.utils import to_networkx, to_dense_adj, dense_to_sparse
 from src.models import *
 from src.server import Server
 from src.client import Client_NC
-from src.utils import LargestConnectedComponents, torch_save, torch_load
-
-def _metis_graph_cut(g, num_owners):
-    G = to_networkx(g)
-    n_cuts, membership = metis.part_graph(G, num_owners)
-    assert len(list(set(membership))) == num_owners
-    print(f'graph partition done, metis, n_partitions: {len(list(set(membership)))}, n_lost_edges: {n_cuts}')
-    return n_cuts, membership    
+from src.utils import LargestConnectedComponents, torch_save, torch_load  
 
 def _split_train(data, train_ratio = 0.2):
     n_data = data.num_nodes
@@ -81,14 +74,19 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
     for client_id in range(num_client):
         ds = f'{client_id}-{data}'
         #TODO Get Disjoint or Overlapping argument later
-        partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')['client_data']
-        client_num_nodes = torch.sum(partition.train_mask)
+        partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')
+        tr, val, tst = partition['client_tr'], partition['client_val'] , partition['client_tst']
+        client_num_nodes = torch.sum(tr.x)
         #Generate dataloaders
         #Couldnt run Cora with mini-batching
-        dataloader =  DataLoader(dataset= [partition], batch_size=batchSize, 
+        trloader =  DataLoader(dataset= [tr], batch_size=batchSize, 
+                                 shuffle=False, pin_memory=False)
+        valloader =  DataLoader(dataset= [val], batch_size=batchSize, 
+                                 shuffle=False, pin_memory=False)
+        tstloader =  DataLoader(dataset= [tst], batch_size=batchSize, 
                                  shuffle=False, pin_memory=False)
 
-        splitedData[ds] = (dataloader, client_num_nodes)
+        splitedData[ds] = ({'tr': trloader, 'val': valloader, 'tst' : tstloader}, client_num_nodes)
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
     return splitedData, num_features, num_classes
