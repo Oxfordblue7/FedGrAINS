@@ -20,7 +20,7 @@ def process_selftrain(clients, server, local_epoch):
     df = pd.DataFrame()
     allAccs = run_selftrain_NC(clients, server, local_epoch)
     for k, v in allAccs.items():
-        df.loc[k, [f'train_acc', f'val_acc', f'test_acc']] = v
+        df.loc[k, [f'train_acc', f'val_acc', f'test_acc', f'globtest_acc']] = v
     if args.repeat is None:
         outfile = os.path.join(outpath, f'accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
     else:

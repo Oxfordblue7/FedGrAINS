@@ -17,7 +17,8 @@ class Client_NC():
         self.W_old = {key: value.data.clone() for key, value in self.model.named_parameters()}
 
         self.stats = {'trainingLosses' :[], 'trainingAccs' :[], 'valLosses': [],
-                      'valAccs' :[],'testLosses': [] ,'testAccs' :[]}
+                      'valAccs' :[],'testLosses': [] ,'testAccs' :[],
+                      'globtestLosses': [] ,'globtestAccs' :[]}
 
     def download_from_server(self, server):
         for k in server.W:
@@ -48,6 +49,8 @@ class Client_NC():
 
     def evaluate(self):
         return eval_nc(self.model, self.dataLoader['tst'], self.args.device)
+    def eval_global(self):
+        return eval_nc(self.model, self.dataLoader['glob'], self.args.device)
 
     def local_train_prox(self, local_epoch, mu):
         """ For FedProx """
@@ -57,9 +60,10 @@ class Client_NC():
         self.stats['valLosses'].append(val_loss)
         self.stats['valAccs'].append(val_acc)
         
-
     def evaluate_prox(self, mu):
         return eval_nc_prox(self.model, self.dataLoader['tst'], self.args.device, mu, self.W_old)
+    def eval_global_prox(self, mu):
+        return eval_nc_prox(self.model, self.dataLoader['glob'], self.args.device, mu, self.W_old)
 
 def copy(target, source, keys):
     for name in keys:

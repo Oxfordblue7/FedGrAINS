@@ -11,13 +11,12 @@ from torch_geometric.data import Data
 from torch_geometric.datasets import Planetoid, Amazon
 from torch_geometric.loader import DataLoader
 from sklearn import preprocessing
-from torch_geometric.utils import to_networkx, to_dense_adj, dense_to_sparse
 
 
 from src.models import *
 from src.server import Server
 from src.client import Client_NC
-from src.utils import LargestConnectedComponents, torch_save, torch_load  
+from src.utils import LargestConnectedComponents, torch_save, torch_load, get_data 
 
 def _split_train(data, train_ratio = 0.2):
     n_data = data.num_nodes
@@ -76,7 +75,8 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
         #TODO Get Disjoint or Overlapping argument later
         partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')
         #Load global test
-        
+        global_d = get_data(data, datapath)
+        global_d = global_d.subgraph(global_d.test_mask)
         tr, val, tst = partition['client_tr'], partition['client_val'] , partition['client_tst']
         client_num_nodes = tr.x.size(dim=0)
         #Generate dataloaders
@@ -87,8 +87,10 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
                                  shuffle=False, pin_memory=False)
         tstloader =  DataLoader(dataset= [tst], batch_size=batchSize, 
                                  shuffle=False, pin_memory=False)
+        globloader =  DataLoader(dataset= [global_d], batch_size=batchSize, 
+                                 shuffle=False, pin_memory=False)
 
-        splitedData[ds] = ({'tr': trloader, 'val': valloader, 'tst' : tstloader}, client_num_nodes)
+        splitedData[ds] = ({'tr': trloader, 'val': valloader, 'tst' : tstloader , 'glob' : globloader}, client_num_nodes)
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
     return splitedData, num_features, num_classes

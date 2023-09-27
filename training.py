@@ -13,10 +13,15 @@ def run_selftrain_NC(clients, server, local_epoch):
         client.local_train(local_epoch)
 
         loss, acc = client.evaluate()
+        glob_loss, glob_acc = client.eval_global()
         client.stats['testLosses'].append(loss)
         client.stats['testAccs'].append(acc)
+        client.stats['globtestLosses'].append(glob_loss)
+        client.stats['globtestAccs'].append(glob_acc)
         wandb.log({f'client-{i}/testLoss' : loss, f'client-{i}/testAcc' : acc})
-        allAccs[client.name] = [max(client.stats['trainingAccs']), max(client.stats['valAccs']), max(client.stats['testAccs'])]
+        wandb.log({f'client-{i}/globtestLoss' : glob_loss, f'client-{i}/globtestAcc' : glob_acc})
+        allAccs[client.name] = [max(client.stats['trainingAccs']), max(client.stats['valAccs']),
+                                 max(client.stats['testAccs']), max(client.stats['globtestAccs'])]
         print("  > {} done.".format(client.name))
 
     return allAccs
@@ -45,9 +50,13 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
             # TODO: WE ASSUME full participation
             client.local_train(local_epoch)
             testLoss, testAcc = client.evaluate()
+            globtestLoss, globtestAcc = client.eval_global()
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testAcc)
+            client.stats['globtestLosses'].append(globtestLoss)
+            client.stats['globtestAccs'].append(globtestAcc)
             wandb.log({f'client-{i}/testLoss' : testLoss , f'client-{i}/testAcc' : testAcc})
+            wandb.log({f'client-{i}/globtestLoss' : globtestLoss , f'client-{i}/globtestAcc' : globtestAcc})
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -59,6 +68,7 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
         m =  max(client.stats['valAccs'])
         frame.loc[client.name, 'test_acc'] = client.stats['testAccs'][client.stats['valAccs'].index(m)]
+        frame.loc[client.name, 'globtest_acc'] = client.stats['globtestAccs'][client.stats['valAccs'].index(m)]
 
 
     def highlight_max(s):
@@ -93,9 +103,13 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
             #TODO assume full participation
             client.local_train_prox(local_epoch, mu)
             testLoss, testAcc = client.evaluate_prox(mu)
+            globtestLoss, globtestAcc = client.eval_global_prox(mu)
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testAcc)
+            client.stats['globtestLosses'].append(globtestLoss)
+            client.stats['globtestAccs'].append(globtestAcc)
             wandb.log({f'client-{i}/testLoss' : testLoss, f'client-{i}/testAcc' : testAcc})
+            wandb.log({f'client-{i}/globtestLoss' : globtestLoss, f'client-{i}/globtestAcc' : globtestAcc})
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -110,6 +124,8 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
         frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
         m =  max(client.stats['valAccs'])
         frame.loc[client.name, 'test_acc'] = client.stats['testAccs'][client.stats['valAccs'].index(m)]
+        frame.loc[client.name, 'globtest_acc'] = client.stats['globtestAccs'][client.stats['valAccs'].index(m)]
+
 
     def highlight_max(s):
         is_max = s == s.max()

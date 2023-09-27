@@ -5,12 +5,15 @@ import random
 import time
 import torch
 from torch_geometric.data import Data
+import torch_geometric.datasets as datasets
+from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_networkx, degree, subgraph, to_scipy_sparse_matrix
 import torch.nn.functional as F
 #from community import community_louvain
 import numpy as np
 from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform
+import torch_geometric.transforms as T
 
 
 def torch_save(base_dir, filename, data):
@@ -54,6 +57,20 @@ def get_maxDegree(graphs):
             maxdegree = gdegree
 
     return maxdegree
+
+def get_data(dataset, data_path):
+    if dataset in ['Cora', 'CiteSeer', 'PubMed']:
+        data = datasets.Planetoid(data_path, dataset, transform=T.Compose([LargestConnectedComponents(), T.NormalizeFeatures()]))[0]
+    elif dataset in ['Computers', 'Photo']:
+        data = datasets.Amazon(data_path, dataset, transform=T.Compose([LargestConnectedComponents(), T.NormalizeFeatures()]))[0]
+        data.train_mask, data.val_mask, data.test_mask \
+            = torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool)
+    elif dataset in ['ogbn-arxiv']:
+        data = PygNodePropPredDataset(dataset, root=data_path, transform=T.Compose([T.ToUndirected(), LargestConnectedComponents()]))[0]
+        data.train_mask, data.val_mask, data.test_mask \
+            = torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool), torch.zeros(data.num_nodes, dtype=torch.bool)
+        data.y = data.y.view(-1)
+    return data
 
 def use_node_attributes(graphs):
     num_node_attributes = graphs.num_node_attributes
