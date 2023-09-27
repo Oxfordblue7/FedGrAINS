@@ -51,7 +51,7 @@ def split_train(data, dataset, data_path, ratio_train, mode, n_clients):
     torch_save(f'{data_path}/{dataset}_{mode}/{n_clients}/','train.pt', {'data': data})
     torch_save(f'{data_path}/{dataset}_{mode}/{n_clients}/','test.pt', {'data': data})
     torch_save(f'{data_path}/{dataset}_{mode}/{n_clients}/','val.pt', {'data': data})
-    print(f'splition done, n_train: {n_train}, n_test: {n_test}, n_val: {len(val_indices)}')
+    print(f'Split done, n_train: {n_train}, n_test: {n_test}, n_val: {len(val_indices)}')
     return data
 
 class LargestConnectedComponents(BaseTransform):

@@ -75,8 +75,10 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
         ds = f'{client_id}-{data}'
         #TODO Get Disjoint or Overlapping argument later
         partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')
+        #Load global test
+        
         tr, val, tst = partition['client_tr'], partition['client_val'] , partition['client_tst']
-        client_num_nodes = torch.sum(tr.x)
+        client_num_nodes = tr.x.size(dim=0)
         #Generate dataloaders
         #Couldnt run Cora with mini-batching
         trloader =  DataLoader(dataset= [tr], batch_size=batchSize, 

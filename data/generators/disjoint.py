@@ -20,15 +20,15 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 
 def generate_data(dataset, n_clients):
-    data = split_train(get_data(dataset, data_path), dataset, data_path, ratio_train, 'disjoint', n_clients)
-    split_subgraphs(n_clients, data, dataset)
+    # data = split_train(, dataset, data_path, ratio_train, 'disjoint', n_clients)
+    split_subgraphs(n_clients, get_data(dataset, data_path), dataset)
 
 def split_subgraphs(n_clients, data, dataset):
 
     #Get the natural splits from Cora 
     tr_graph = data.subgraph(data.train_mask) 
     val_graph = data.subgraph(data.val_mask)
-    tst_graph = data.subgraph(data.val_mask)
+    tst_graph = data.subgraph(data.test_mask)
 
     #Metis partitioning for each split
     G_tr = torch_geometric.utils.to_networkx(tr_graph)
@@ -92,4 +92,4 @@ def split_subgraphs(n_clients, data, dataset):
         print(f'client_id: {client_id}, iid, n_test_nodes: {len(client_indices_tst)}, n_test_edges: {cli_num_edges_tst}')
 
 for n_clients in clients:
-    generate_data(dataset='PubMed', n_clients=n_clients)
+    generate_data(dataset='Photo', n_clients=n_clients)
