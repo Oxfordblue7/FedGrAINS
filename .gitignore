@@ -1,5 +1,4 @@
 metis-5.1.0/*
-data/*
 outputs/*
 __pycache__/*
 */__pycache__/*
@@ -8,5 +7,6 @@ __pycache__/*
 *.txt
 */wandb/*
 wandb/*
+*/*/wandb/*
 evaluations/*
 plots/*

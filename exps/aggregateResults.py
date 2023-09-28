@@ -1,4 +1,5 @@
 import os
+import wandb
 import argparse
 import pandas as pd
 from pathlib import Path
@@ -19,13 +20,14 @@ def _aggregate(inpath, outpath, filename):
 
 def average_aggregate_all(args):
     algos = ['selftrain_NA','selftrain_Dropout' ,'selftrain_DropEdge', 'fedavg_NA','fedavg_Dropout' ,'fedavg_DropEdge', f'fedprox_mu{args.mu}_NA', f'fedprox_mu{args.mu}_Dropout', f'fedprox_mu{args.mu}_DropEdge']
-    dfs = pd.DataFrame(index=algos, columns=['avg. of val_accuracy_mean', 'avg. of val_accuracy_std', 'avg. of test_accuracy_mean', 'avg. of test_accuracy_std'])
+    dfs = pd.DataFrame(index=algos, columns=['avg-val_acc_mean', 'avg-val_acc_std', 'avg-test_acc_mean', 'avg-test_acc_std', 'avg-glob-test_acc_mean', 'avg-glob-test_acc_std'])
     for algo in algos:
         df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_{args.dropout}_GC.csv'), header=0, index_col=0)
-        df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std']]
+        df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std', 'globtest_acc_mean', 'globtest_acc_std']]
         dfs.loc[algo] = list(df.mean())
         print(algo)
-
+    wandb_agg_df = wandb.Table(dataframe=dfs)
+    wandb.log({"aggr_results" : wandb_agg_df})
     outfile = os.path.join(args.outpath, f'avg_accuracy_allAlgos_GC.csv')
     dfs.to_csv(outfile, header=True, index=True)
     print("Wrote to:", outfile)
@@ -72,6 +74,10 @@ if __name__ == '__main__':
         parser.error(str(msg))
     args.inpath = f'./outputs/raw/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}/repeats'
     args.outpath = f'./outputs/processed/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}'
-
+    wandb.init( project = 'fedgdrop',
+        name=f'{args.dataset}-{args.numcli}clients-{args.model}-aggr-results-{args.exp_num}' 
+    )
+    wandb.config.update(args)
     #     """ multiDS: aggregagte all outputs """
     main_aggregate_prelim(args)
+    wandb.finish()
