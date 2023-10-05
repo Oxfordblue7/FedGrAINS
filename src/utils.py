@@ -5,6 +5,7 @@ import random
 import time
 import torch
 from torch_geometric.data import Data
+import torch_geometric.transforms as T
 import torch_geometric.datasets as datasets
 from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_networkx, degree, subgraph, to_scipy_sparse_matrix
@@ -13,7 +14,7 @@ import torch.nn.functional as F
 import numpy as np
 from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform
-import torch_geometric.transforms as T
+
 
 
 def torch_save(base_dir, filename, data):
