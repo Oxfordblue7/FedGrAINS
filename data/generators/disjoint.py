@@ -10,7 +10,7 @@ from torch_geometric.utils import to_dense_adj, dense_to_sparse
 
 from utils import get_data, split_train, torch_save , louvain_graph_cut
 
-dset= 'Cora'
+dset= 'PubMed'
 data_path = '../../../datasets/'
 ratio_train = 0.6
 seed = 2021
@@ -23,15 +23,21 @@ torch.manual_seed(seed)
 def generate_data(dataset, n_clients, partition, mode = False):
     if mode:
         #Natural split then partition (apply partition to each split) - ours 
+        # 20, 70, 10 we apply graph part to 20, 70, 10 separately
         split_subgraphs_v1(n_clients,  get_data(dataset, data_path), dataset, partition)
     else:
         #Manual split then partition - FedPUB
+        # i first change from 20/70/10 to 60/2020
+        #   then apply graph part based on whole graph and apply split 
+        #ratios to each partition 
+        #partition the whole graph first then we get 60, 20 20 for each client
         data = split_train(get_data(dataset, data_path), dataset, data_path, ratio_train, 'disjoint', n_clients)
         split_subgraphs_v2(n_clients,data, dataset, partition)
 
 def split_subgraphs_v1(n_clients, data, dataset, partition = "METIS"):
     """
     This function supports Natural splits then Graph partitioning
+    This method is Han's suggestion
     """
 
     tr_graph = data.subgraph(data.train_mask) 
@@ -118,6 +124,7 @@ def split_subgraphs_v2(n_clients, data, dataset, partition = "METIS"):
 
     """
     This function supports manual splits then Graph partitioning case
+    Fed-PUB way 
     """
     
     G = torch_geometric.utils.to_networkx(data, to_undirected = True )
@@ -174,6 +181,6 @@ def split_subgraphs_v2(n_clients, data, dataset, partition = "METIS"):
         print(f'client_id: {client_id} , {partition}, n_train_node: {client_num_nodes}, n_train_edge: {client_num_edges}')
 
 for mode in [False]:
-    for part in [ "Louvain"]:      
+    for part in ["METIS"]:      
         for n_clients in clients:
             generate_data(dataset=dset, n_clients=n_clients, partition=part, mode = mode)
