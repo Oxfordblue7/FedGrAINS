@@ -10,7 +10,7 @@ from torch_geometric.utils import to_dense_adj, dense_to_sparse
 
 from utils import get_data, split_train, torch_save , louvain_graph_cut
 
-dset= 'PubMed'
+dset= 'Cora'
 data_path = '../../../datasets/'
 ratio_train = 0.6
 seed = 2021

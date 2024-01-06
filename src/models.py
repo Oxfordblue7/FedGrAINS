@@ -1,12 +1,10 @@
 import torch
 import torch.nn.functional as F
 from torch import Tensor
-from torch_sparse import SparseTensor, set_diag
+from torch_sparse import SparseTensor
 from torch_geometric.typing import Adj
 from torch_geometric.nn import GCNConv, SAGEConv, GATConv
-from torch_geometric.utils import remove_self_loops, add_self_loops, degree
-import random
-
+from typing import Union
 """
 Unified DropBlock Module for Dropout, DropEdge, and DropNode
 """
@@ -65,6 +63,21 @@ class serverGCN(torch.nn.Module):
             self.graph_convs.append(GCNConv(nhid, nhid))
         self.classifier = torch.nn.Linear(nhid, ncls)
 
+class serverGCNv2(torch.nn.Module):
+    def __init__(self,
+                 in_features: int,
+                 hidden_dims: list[int]):
+        super(GCNv2, self).__init__()
+        dims = [in_features] + hidden_dims
+        gcn_layers = []
+        for i in range(len(hidden_dims) - 1):
+            gcn_layers.append(GCNConv(in_channels=dims[i],
+                                      out_channels=dims[i + 1]))
+
+        gcn_layers.append(GCNConv(in_channels=dims[-2], out_channels=dims[-1]))
+        self.gcn_layers = torch.nn.ModuleList(gcn_layers)
+
+
 """
 Client Models
 """
@@ -118,6 +131,42 @@ class GCN(torch.nn.Module):
 
     def loss(self, pred, label):
         return F.cross_entropy(pred, label)
+
+class GCNv2(torch.nn.Module):
+    def __init__(self,
+                 in_features: int,
+                 hidden_dims: list[int], dropout: float=0.):
+        super(GCNv2, self).__init__()
+        self.dropout = dropout
+        dims = [in_features] + hidden_dims
+        gcn_layers = []
+        for i in range(len(hidden_dims) - 1):
+            gcn_layers.append(GCNConv(in_channels=dims[i],
+                                      out_channels=dims[i + 1]))
+
+        gcn_layers.append(GCNConv(in_channels=dims[-2], out_channels=dims[-1]))
+        self.gcn_layers = torch.nn.ModuleList(gcn_layers)
+
+    def forward(self,
+                x: torch.Tensor,
+                edge_index: Union[torch.Tensor, list[torch.Tensor]],
+                ) -> torch.Tensor:
+        layerwise_adjacency = type(edge_index) == list
+
+        for i, layer in enumerate(self.gcn_layers[:-1], start=1):
+            edges = edge_index[-i] if layerwise_adjacency else edge_index
+            x = torch.relu(layer(x, edges))
+            x = F.dropout(x, p=self.dropout, training=self.training)
+
+        edges = edge_index[0] if layerwise_adjacency else edge_index
+        logits = self.gcn_layers[-1](x, edges)
+        logits = F.dropout(logits, p=self.dropout, training=self.training)
+
+        # torch.cuda.synchronize()
+        memory_alloc = torch.cuda.memory_allocated() / (1024 * 1024)
+
+        return logits, memory_alloc
+
 
 class SAGE(torch.nn.Module):
     def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0):

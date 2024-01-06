@@ -73,11 +73,11 @@ if __name__ == '__main__':
                         help='Number of GNN layers')
     parser.add_argument('--hidden', type=int, default=128,
                         help='Number of hidden units.')
-    parser.add_argument('--dropout', type=float, default=0.5,
+    parser.add_argument('--dropout', type=float, default=0.,
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
                     help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
-    parser.add_argument('--batch_size', type=int, default=1,
+    parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
@@ -113,10 +113,9 @@ if __name__ == '__main__':
     seed_dataSplit = 1234
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(args.natural_split)
-    args.mode = "v1" if not args.natural_split else "v2"
+    args.mode = "v2"
     print(args.mode)
-    wandb.init( project = 'fedgdrop',
+    wandb.init( project = 'fedgdrop',mode="disabled",
         name=f'{args.dataset}_{args.mode}-{args.num_clients}clients-{args.model}-{args.algo}-{args.dropping_method}' 
     )
     wandb.config.update(args)
@@ -142,7 +141,7 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
-    splitedData, num_features, num_classes = setup_devices.prepareData_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
+    splitedData, num_features, num_classes = setup_devices.prepareData_fedgdrop_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
                                                        mode = args.mode, partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
@@ -158,14 +157,14 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
 
-    init_clients, init_server, init_idx_clients = setup_devices.setup_devices(splitedData, num_features, num_classes, args)
+    init_clients, init_server, init_idx_clients = setup_devices.setup_fedgdrop_devices(splitedData, num_features, num_classes, args)
     print("\nDone setting up devices.")
 
     if args.algo == 'selftrain':
         #They do not communicate, so they have to run num_rounds x 1 local epochs
         process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.num_rounds)
     elif args.algo == 'fedavg':
-        process_fedavg(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
+        process_fedavg(clients=init_clients, server=init_server)
     else:
         process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
     wandb.finish()

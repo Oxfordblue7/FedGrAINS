@@ -4,9 +4,12 @@ import pickle
 import random
 import time
 import torch
+import scipy.sparse as sp
+from torch import Tensor
 from torch_geometric.data import Data
 import torch_geometric.transforms as T
 import torch_geometric.datasets as datasets
+from torch.distributions import Bernoulli, Gumbel
 from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_networkx, degree, subgraph, to_scipy_sparse_matrix
 import torch.nn.functional as F
@@ -15,6 +18,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform
 
+from typing import Tuple, Dict
 
 
 def torch_save(base_dir, filename, data):
@@ -126,6 +130,112 @@ def get_stats(df, ds, graphs_train, graphs_val=None, graphs_test=None):
         # df.loc[ds, 'avgEdges_test'] = avgEdges
 
     return df
+
+
+def sample_neighborhoods_from_probs(logits: torch.Tensor,
+                                    neighbor_nodes: torch.Tensor,
+                                    num_samples: int = -1
+    ) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
+    """Remove edges from an edge index, by removing nodes according to some
+    probability.
+
+    Uses Gumbel-max trick to sample from Bernoulli distribution. This is off-policy, since the original input
+    distribution is a regular Bernoulli distribution.
+    Args:
+        logits: tensor of shape (N,), where N all the number of unique
+            nodes in a batch, containing the probability of dropping the node.
+        neighbor_nodes: tensor containing global node identifiers of the neighbors nodes
+        num_samples: the number of samples to keep. If None, all edges are kept.
+    """
+
+    k = num_samples
+    n = neighbor_nodes.shape[0]
+    if k >= n:
+        # TODO: Test this setting
+        return neighbor_nodes, torch.sigmoid(
+            logits.squeeze(-1)).log(), {}
+    assert k < n
+    assert k > 0
+    b = Bernoulli(logits=logits.squeeze())
+
+    # Gumbel-sort trick https://timvieira.github.io/blog/post/2014/08/01/gumbel-max-trick-and-weighted-reservoir-sampling/
+    gumbel = Gumbel(torch.tensor(0., device=logits.device), torch.tensor(1., device=logits.device))
+    gumbel_noise = gumbel.sample((n,))
+    perturbed_log_probs = b.probs.log() + gumbel_noise
+
+    samples = torch.topk(perturbed_log_probs, k=k, dim=0, sorted=False)[1]
+
+    # calculate the entropy in bits
+    entropy = torch.tensor(-(b.probs * (b.probs).log2() + (1 - b.probs) * (1 - b.probs).log2()))
+
+    min_prob = b.probs.min(-1)[0]
+    max_prob = b.probs.max(-1)[0]
+
+    if torch.isnan(entropy).any():
+        nan_ind = torch.isnan(entropy)
+        entropy[nan_ind] = 0.0
+
+    std_entropy, mean_entropy = torch.std_mean(entropy)
+    mask = torch.zeros_like(logits.squeeze(), dtype=torch.float)
+    mask[samples] = 1
+
+    neighbor_nodes = neighbor_nodes[mask.bool().cpu()]
+
+    stats_dict = {"min_prob": min_prob,
+                  "max_prob": max_prob,
+                  "mean_entropy": mean_entropy,
+                  "std_entropy": std_entropy}
+
+    return neighbor_nodes, b.log_prob(mask), stats_dict
+
+
+def get_neighborhoods(nodes: Tensor,
+                      adjacency: sp.csr_matrix
+                      ) -> Tensor:
+    """Returns the neighbors of a set of nodes from a given adjacency matrix"""
+    neighborhood = adjacency[nodes].tocoo()
+    neighborhoods = torch.stack([nodes[neighborhood.row],
+                                 torch.tensor(neighborhood.col)],
+                                dim=0)
+    return neighborhoods
+
+
+def slice_adjacency(adjacency: sp.csr_matrix, rows: Tensor, cols: Tensor):
+    """Selects a block from a sparse adjacency matrix, given the row and column
+    indices. The result is returned as an edge index.
+    """
+    row_slice = adjacency[rows]
+    row_col_slice = row_slice[:, cols]
+    slice = row_col_slice.tocoo()
+    edge_index = torch.stack([rows[slice.row],
+                              cols[slice.col]],
+                             dim=0)
+    return edge_index
+
+
+class TensorMap:
+    """A class used to quickly map integers in a tensor to an interval of
+    integers from 0 to len(tensor) - 1. This is useful for global to local
+    conversions.
+
+    Example:
+        >>> nodes = torch.tensor([22, 32, 42, 52])
+        >>> node_map = TensorMap(size=nodes.max() + 1)
+        >>> node_map.update(nodes)
+        >>> node_map.map(torch.tensor([52, 42, 32, 22, 22]))
+        tensor([3, 2, 1, 0, 0])
+    """
+
+    def __init__(self, size):
+        self.map_tensor = torch.empty(size, dtype=torch.long)
+        self.values = torch.arange(size)
+
+    def update(self, keys: Tensor):
+        values = self.values[:len(keys)]
+        self.map_tensor[keys] = values
+
+    def map(self, keys):
+        return self.map_tensor[keys]
 
 
 class LargestConnectedComponents(BaseTransform):

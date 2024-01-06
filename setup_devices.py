@@ -5,17 +5,21 @@ import pandas as pd
 import sys
 import torch
 # import metispy as metis
+
 import torch.nn.functional as F
 import torch_geometric.transforms as T
 from torch_geometric.data import Data
 from torch_geometric.datasets import Planetoid, Amazon
 from torch_geometric.loader import DataLoader
+from torch.utils.data import TensorDataset
+
+import scipy.sparse as sp
 from sklearn import preprocessing
 
 
 from src.models import *
-from src.server import Server
-from src.client import Client_NC
+from src.server import Server,FedGDrop_Server
+from src.client import Client_NC, FedGDrop_Client
 from src.utils import LargestConnectedComponents, torch_save, torch_load, get_data 
 
 def _split_train(data, train_ratio = 0.2):
@@ -38,9 +42,7 @@ def _split_train(data, train_ratio = 0.2):
     data.val_mask[val_indices] = True
     return data
 
-# TODO: modify to load saved partitioned data directly
-# TODO: Create a separate data generation script to generate partitions
-def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=False):
+def prepareData_oneDS(datapath, data, num_client, batchSize, mode, partition= "METIS", seed=None, overlap=False):
 
     # random.seed(seed)
     # np.random.seed(seed)
@@ -59,12 +61,6 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
         #MS_academic
         raise Exception("MS Academic not yet implemented!")
 
-    # #Train-val-test split
-    # #Train ratio is 0.2 in accordance with FedPUB
-    # dataset = _split_train(dataset)
-
-    # #Disjoint metis partitioning 
-    # _ , membership =  _metis_graph_cut(dataset, num_client)
     
     splitedData = {}
     # df = pd.DataFrame()
@@ -73,14 +69,12 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
     for client_id in range(num_client):
         ds = f'{client_id}-{data}'
         #TODO Get Disjoint or Overlapping argument later
-        partition = torch_load(datapath, f'{data}_disjoint/{num_client}/partition_{client_id}.pt')
-        #Load global test
+        partition = torch_load(datapath, f'{data}_disjoint_{mode}_{partition}/{num_client}/partition_{client_id}.pt')
+        #TODO: Check global test data
         global_d = get_data(data, datapath)
-        global_d = global_d.subgraph(global_d.test_mask)
         tr, val, tst = partition['client_tr'], partition['client_val'] , partition['client_tst']
         client_num_nodes = tr.x.size(dim=0)
         #Generate dataloaders
-        #Couldnt run Cora with mini-batching
         trloader =  DataLoader(dataset= [tr], batch_size=batchSize, 
                                  shuffle=False, pin_memory=False)
         valloader =  DataLoader(dataset= [val], batch_size=batchSize, 
@@ -94,6 +88,56 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, seed=None, overlap=
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
     return splitedData, num_features, num_classes
+
+def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, partition= "METIS", seed=None, overlap=False):
+
+    # random.seed(seed)
+    # np.random.seed(seed)
+    # torch.manual_seed(seed)
+    if data  == "Cora":
+        num_classes, num_features = 7, 1433 
+    elif data  == "CiteSeer":
+        num_classes, num_features = 6, 3703
+    elif data  == "PubMed":
+        num_classes, num_features = 3, 500
+    elif data  == 'Computers':
+        num_classes, num_features = 10, 767
+    elif data  == 'Photo':
+        num_classes, num_features = 8,745
+    else:
+        #MS_academic
+        raise Exception("MS Academic not yet implemented!")
+    
+    splitedData = {}
+
+    for client_id in range(num_client):
+        ds = f'{client_id}-{data}'
+        #TODO Get Disjoint or Overlapping argument later
+        #v2 saves only one client data as we operate over trasnductive setting
+        part = torch_load(datapath, f'{data}_disjoint_v2_{partition}/{num_client}/partition_{client_id}.pt')
+        #TODO: Check global test data
+        cli_graph = part['client_data']
+        client_num_nodes = cli_graph.x.size(dim=0)
+        #Generate dataloaders
+
+        train_idx = cli_graph.train_mask.nonzero().squeeze(1)
+        trloader = torch.utils.data.DataLoader(TensorDataset(train_idx), batch_size= batchSize)
+
+        val_idx =cli_graph.val_mask.nonzero().squeeze(1)
+        valloader = torch.utils.data.DataLoader(TensorDataset(val_idx), batch_size= batchSize)
+
+        test_idx = cli_graph.test_mask.nonzero().squeeze(1)
+        tstloader = torch.utils.data.DataLoader(TensorDataset(test_idx), batch_size=batchSize)
+
+        adjacency = sp.csr_matrix((np.ones(cli_graph.num_edges, dtype=bool),
+                                cli_graph.edge_index),
+                                shape=(client_num_nodes, client_num_nodes))
+
+        splitedData[ds] = ({"data": cli_graph, "tr" : trloader , "val": valloader, "tst": tstloader, "adj" : adjacency}, client_num_nodes)
+        #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
+
+    return splitedData, num_features, num_classes
+
 
 def setup_devices(splitedData, num_features, num_classes, args):
     idx_clients = {}
@@ -109,5 +153,35 @@ def setup_devices(splitedData, num_features, num_classes, args):
     smodel = getattr(sys.modules[__name__], "server"+args.model)(nlayer=args.nlayer, nfeat = num_features,
                                                                  nhid=args.hidden, ncls = num_classes )
     server = Server(smodel, args.device)
+
+    return clients, server, idx_clients
+
+def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
+    idx_clients = {}
+    clients = []
+
+    #TODO: Adjust argument
+    num_indicators = 3 #For Cora only
+    # if args.use_indicators:
+    #     num_indicators = args.sampling_hops + 1
+    # else:
+    #     num_indicators = 0
+
+    for idx, ds in enumerate(splitedData.keys()):
+        idx_clients[idx] = ds
+        dataloader, num_nodes = splitedData[ds]
+        cmodel_nc = GCNv2(num_features, hidden_dims=[args.hidden, num_classes], dropout=args.dropout)
+        cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, 1])
+        opt_nc = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr)
+        log_z = torch.tensor(0., requires_grad=True)
+        opt_flow = torch.optim.Adam(list(cmodel_flow.parameters()) + [log_z], lr=1e-3)
+        
+        clients.append(FedGDrop_Client([cmodel_nc,cmodel_flow, log_z], idx, ds, dataloader, num_nodes, num_indicators, [opt_nc, opt_flow], args))
+
+    #Create server model
+    smodel_nc = GCNv2(num_features, hidden_dims=[args.hidden, num_classes])
+    smodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, 1])
+
+    server = FedGDrop_Server(smodel_nc, smodel_flow, args.device)
 
     return clients, server, idx_clients
