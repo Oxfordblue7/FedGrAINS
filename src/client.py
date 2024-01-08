@@ -364,12 +364,12 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                       node_map,
                                       num_ind,
                                       device,
-                                      data.test_mask,
+                                      data.val_mask,
                                       True,
                                       loader=dataloader['val'],
                                       full_batch=True)
 
-        test_accuracy, test_f1 = eval_fedgdrop(nc,
+        tr_accuracy, tr_f1 = eval_fedgdrop(nc,
                                       flow,
                                       data,
                                       args,
@@ -377,12 +377,12 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                       node_map,
                                       num_ind,
                                       device,
-                                      data.test_mask,
+                                      data.train_mask,
                                       True,
-                                      loader=dataloader['tst'],
+                                      loader=dataloader['tr'],
                                       full_batch=True)
         
-    return val_accuracy, val_f1, test_accuracy, test_f1
+    return tr_accuracy, tr_f1, val_accuracy, val_f1
 
 
 @torch.no_grad()
