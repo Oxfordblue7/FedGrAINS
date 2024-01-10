@@ -36,6 +36,7 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         frac = 1.0
 
     for c_round in range(1, COMMUNICATION_ROUNDS + 1):
+        print(f"Round {c_round}")
         if (c_round) % 50 == 0:
             print(f"  > round {c_round}")
 
@@ -46,15 +47,17 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
             selected_clients = sampling_fn(clients, frac)
 
         for i,client in enumerate(selected_clients):
+            print(f"Client {i}")
             # only get weights of graphconv layers
-            # TODO: WE ASSUME full participation
             client.local_train(local_epoch)
+            #Loss is acc for Naive FedGDrop
+            #For multiclass . 
             testLoss, testAcc = client.evaluate()
             globtestLoss, globtestAcc = client.eval_global()
             client.stats['testLosses'].append(testLoss)
-            client.stats['testAccs'].append(testAcc)
+            client.stats['testAccs'].append(testLoss)
             client.stats['globtestLosses'].append(globtestLoss)
-            client.stats['globtestAccs'].append(globtestAcc)
+            client.stats['globtestAccs'].append(globtestLoss)
             wandb.log({f'client-{i}/testLoss' : testLoss , f'client-{i}/testAcc' : testAcc})
             wandb.log({f'client-{i}/globtestLoss' : globtestLoss , f'client-{i}/globtestAcc' : globtestAcc})
 
@@ -105,9 +108,9 @@ def run_fedprox(clients, server, COMMUNICATION_ROUNDS, local_epoch, mu, samp=Non
             testLoss, testAcc = client.evaluate_prox(mu)
             globtestLoss, globtestAcc = client.eval_global_prox(mu)
             client.stats['testLosses'].append(testLoss)
-            client.stats['testAccs'].append(testAcc)
+            client.stats['testAccs'].append(testLoss) 
             client.stats['globtestLosses'].append(globtestLoss)
-            client.stats['globtestAccs'].append(globtestAcc)
+            client.stats['globtestAccs'].append(globtestLoss)
             wandb.log({f'client-{i}/testLoss' : testLoss, f'client-{i}/testAcc' : testAcc})
             wandb.log({f'client-{i}/globtestLoss' : globtestLoss, f'client-{i}/globtestAcc' : globtestAcc})
 

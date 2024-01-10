@@ -1,5 +1,5 @@
 import os, sys, json
-import argparse
+import argparse, configparser
 import random
 import torch
 import wandb
@@ -77,7 +77,7 @@ if __name__ == '__main__':
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
                     help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=1,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
@@ -89,7 +89,7 @@ if __name__ == '__main__':
                         help='The input path of data.')
     parser.add_argument('--outbase', type=str, default='./outputs/raw',
                         help='The base path for outputting.')
-    parser.add_argument('--exp_num', type=int, default=0,
+    parser.add_argument('--exp_num', type=int, default=4,
                         help='Experiment number.')
     parser.add_argument('--repeat', help='index of repeating;',
                         type=int, default=None)
@@ -98,30 +98,64 @@ if __name__ == '__main__':
     parser.add_argument('--model', help='specify the model',
                         type=str, default='GCN')
     parser.add_argument('--algo', help='specify the Federated optimization',
-                        type=str, default='fedprox')
+                        type=str, default='fedavg')
     parser.add_argument('--overlap', help='whether clients have overlapped data',
                         type=bool, default=False)
     parser.add_argument('--convert_x', help='whether to convert original node features to one-hot degree features',
                         type=bool, default=False)
+    parser.add_argument('--log_wandb', help='log into wandb or not',
+                        type=bool, default=False)
     parser.add_argument('--num_clients', help='number of clients',
                         type=int, default=10)
+    
+    parser.add_argument("-c", "--config_file", type=str, help='Config file')
+
+    
+    """ 
+    GFlowNet Parameters
+    """
+    parser.add_argument('--n_hops', type=int, default=2,
+                        help='The number of hops to sample around.')
+    parser.add_argument('--flow_lr', type=float, default=1e-4,
+                        help='learning rate for GFlowNet')
+    parser.add_argument('--k', type=int, default=16,
+                        help='The number of nodes to choose.')
+    parser.add_argument('--use_indicators', type=bool, default=True,
+                        help='The number of nodes to choose.')
+    parser.add_argument('--eval_on_cpu', type=bool, default=True,
+                        help='The number of nodes to choose.')
+    parser.add_argument('--eval_full_batch', type=bool, default=True,
+                        help='Option to evaluate over full batch.')
+    parser.add_argument('--loss_coef', type=float, default=1e4,
+                        help='The loss coefficient to balance reward.')
+    parser.add_argument('--log_z_init', type=float, default=0.,
+                        help='The logz constant initialization.')
+    parser.add_argument('--reg_param', type=float, default=0.,
+                        help='Regularization coefficient over')
     try:
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
 
+    if args.config_file:
+        config = configparser.ConfigParser()
+        config.read(args.config_file)
+        defaults = {}
+        defaults.update(dict(config.items("Params")))
+        parser.set_defaults(**defaults)
+        args = parser.parse_args() # Overwrite arguments
     seed_dataSplit = 1234
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
-    args.mode = "v2"
-    print(args.mode)
-    wandb.init( project = 'fedgdrop',mode="disabled",
-        name=f'{args.dataset}_{args.mode}-{args.num_clients}clients-{args.model}-{args.algo}-{args.dropping_method}' 
+    wandb.init( project = 'fedgdrop',
+        name=f'{args.dataset}_v2-{args.num_clients}clients-{args.model}-fedgdrop',
+        mode='online' if args.log_wandb else 'disabled',
+        config = args
     )
-    wandb.config.update(args)
+    # wandb.config.update(args)
     
 
-    outpath = os.path.join(args.outbase, f'{args.dataset}_{args.mode}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
+    outpath = os.path.join(args.outbase, f'{args.dataset}_v2-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
@@ -142,7 +176,7 @@ if __name__ == '__main__':
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
 
     splitedData, num_features, num_classes = setup_devices.prepareData_fedgdrop_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
-                                                       mode = args.mode, partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
+                                                       mode = 'v2', partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
     # save statistics of data on clients

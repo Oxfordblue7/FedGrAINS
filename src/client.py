@@ -129,13 +129,13 @@ class FedGDrop_Client():
     def evaluate(self):
         return eval_fedgdrop(self.nc,self.flow, self.dataLoader['data'], self.args,
                              self.dataLoader['adj'], self.node_map, self.num_ind, self.args.device,
-                             self.dataLoader['data'].test_mask,True,loader= self.dataLoader['tst'],
-                            full_batch=True)
+                             self.dataLoader['data'].test_mask,self.args.eval_on_cpu,loader= self.dataLoader['tst'],
+                            full_batch=self.args.eval_full_batch)
     def eval_global(self):
         return eval_fedgdrop(self.nc,self.flow, self.dataLoader['data'], self.args,
                              self.dataLoader['adj'], self.node_map, self.num_ind, self.args.device,
-                             self.dataLoader['data'].test_mask,True,loader= self.dataLoader['tst'],
-                            full_batch=True)
+                             self.dataLoader['data'].test_mask,self.args.eval_on_cpu,loader= self.dataLoader['tst'],
+                            full_batch=self.args.eval_full_batch)
 
 
 def copy(target, source, keys):
@@ -200,10 +200,6 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
     batch_nodes_mask = torch.zeros(num_nodes, dtype=torch.bool)
     indicator_features = torch.zeros((num_nodes, num_ind))
 
-    # This will collect memory allocations for all epochs
-    all_mem_allocations_point1 = []
-    all_mem_allocations_point2 = []
-    all_mem_allocations_point3 = []
     adjacency = dataloader['adj']
 
     # logger.info('Training')
@@ -211,9 +207,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
         acc_loss_gfn = 0
         acc_loss_c = 0
         # add a list to collect memory usage
-        mem_allocations_point1 = []  # The first point of memory usage measurement after the GCNConv forward pass
-        mem_allocations_point2 = []  # The second point of memory usage measurement after the GCNConv backward pass
-        mem_allocations_point3 = []  # The third point of memory usage measurement after the GCNConv backward pass
+
 
         with tqdm(total=len(train_loader), desc=f'Epoch {epoch}') as bar:
             for batch_id, batch in enumerate(train_loader):
@@ -235,7 +229,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 neighborhood_sizes = []
                 all_statistics = []
                 # Sample neighborhoods with the GCN-GF model: 2-Hop Sampling
-                for hop in range(2):
+                for hop in range(args.n_hops):
                     # Get neighborhoods of target nodes in batch
                     neighborhoods = get_neighborhoods(previous_nodes, adjacency)
 
@@ -255,27 +249,27 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                     local_neighborhoods = node_map.map(neighborhoods).to(device)
                     # Select only the needed rows from the feature and
                     # indicator matrices
-                    x = torch.cat([data.x[batch_nodes],
-                                   indicator_features[batch_nodes]],
-                                   dim=1
-                                ).to(device)
-                    # else:
-                    #     x = data.x[batch_nodes].to(device)
+                    if args.use_indicators:
+                        x = torch.cat([data.x[batch_nodes],
+                                    indicator_features[batch_nodes]],
+                                    dim=1
+                                    ).to(device)
+                    else:
+                        x = data.x[batch_nodes].to(device)
 
                     # Get probabilities for sampling each node
                     node_logits, _ = flow(x, local_neighborhoods)
                     # Select logits for neighbor nodes only
                     node_logits = node_logits[node_map.map(neighbor_nodes)]
-
                     # Sample neighbors using the logits
                     # num_samples = 16
+                    #TODO : ASSERT num_samples <= batch_size
                     sampled_neighboring_nodes, log_prob, statistics = sample_neighborhoods_from_probs(
                         node_logits,
                         neighbor_nodes,
-                        16
+                        args.k
                     )
                     all_nodes_mask[sampled_neighboring_nodes] = True
-
                     log_probs.append(log_prob)
                     sampled_sizes.append(sampled_neighboring_nodes.shape[0])
                     neighborhood_sizes.append(neighborhoods.shape[-1])
@@ -303,16 +297,15 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 edge_indices = [node_map.map(e).to(device) for e in global_edge_indices]
 
                 #TODO: There is a bug in copying models. At some point, nc goes to cpu
+                #Somehow solved with this, but still we should check it .
                 x = data.x[all_nodes].to(device)
                 logits, gcn_mem_alloc = nc(x, edge_indices)
 
                 local_target_ids = node_map.map(target_nodes)
                 loss_c = loss_fn(logits[local_target_ids],
-                                 data.y[target_nodes].to(device)) + 0.*torch.sum(torch.var(logits, dim=1))
+                                 data.y[target_nodes].to(device)) + args.reg_param *torch.sum(torch.var(logits, dim=1))
 
                 opt_nc.zero_grad()
-
-                mem_allocations_point3.append(torch.cuda.memory_allocated() / (1024 * 1024))
 
                 loss_c.backward()
 
@@ -321,10 +314,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 opt_flow.zero_grad()
                 cost_gfn = loss_c.detach()
                 #loss_coef: float = 1e4
-                loss_gfn = (log_z + torch.sum(torch.cat(log_probs, dim=0)) + 1e4*cost_gfn)**2
-
-                mem_allocations_point1.append(torch.cuda.max_memory_allocated() / (1024 * 1024))
-                mem_allocations_point2.append(gcn_mem_alloc)
+                loss_gfn = (log_z + torch.sum(torch.cat(log_probs, dim=0)) + args.loss_coef*cost_gfn)**2
 
                 loss_gfn.backward()
 
@@ -333,16 +323,16 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 batch_loss_gfn = loss_gfn.item()
                 batch_loss_c = loss_c.item()
 
-                # wandb.log({'batch_loss_gfn': batch_loss_gfn,
-                #            'batch_loss_c': batch_loss_c,
-                #            'log_z': log_z,
-                #            '-log_probs': -torch.sum(torch.cat(log_probs, dim=0))})
+                wandb.log({f'client-{cli_id}/batch_loss_gfn': batch_loss_gfn,
+                           f'client-{cli_id}/batch_loss_c': batch_loss_c,
+                           f'client-{cli_id}/log_z': log_z,
+                           f'client-{cli_id}/-log_probs': -torch.sum(torch.cat(log_probs, dim=0))})
 
-                # log_dict = {}
-                # for i, statistics in enumerate(all_statistics):
-                #     for key, value in statistics.items():
-                #         log_dict[f"{key}_{i}"] = value
-                # wandb.log(log_dict)
+                log_dict = {}
+                for i, statistics in enumerate(all_statistics):
+                    for key, value in statistics.items():
+                        log_dict[f"{key}_{i}"] = value
+                wandb.log(log_dict)
 
                 acc_loss_gfn += batch_loss_gfn / len(train_loader)
                 acc_loss_c += batch_loss_c / len(train_loader)
@@ -365,9 +355,9 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                       num_ind,
                                       device,
                                       data.val_mask,
-                                      True,
+                                      args.eval_on_cpu,
                                       loader=dataloader['val'],
-                                      full_batch=True)
+                                      full_batch=args.eval_full_batch)
 
         tr_accuracy, tr_f1 = eval_fedgdrop(nc,
                                       flow,
@@ -378,9 +368,9 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                       num_ind,
                                       device,
                                       data.train_mask,
-                                      True,
+                                      args.eval_on_cpu,
                                       loader=dataloader['tr'],
-                                      full_batch=True)
+                                      full_batch=args.eval_full_batch)
         
     return tr_accuracy, tr_f1, val_accuracy, val_f1
 
@@ -398,7 +388,6 @@ def eval_nc(model, loader, device):
             # TODO: to check the mask is loaded correctly (no need for mask rn)
             loss = model.loss(pred, label)
             total_loss = loss.item()
-            # TODO: to check the mask is loaded correctly (no need for mask rn)
             preds.append(pred)
             targets.append(label)
             lss.append(total_loss)
@@ -431,7 +420,6 @@ def eval_fedgdrop(gcn_c: torch.nn.Module,
     message passing or by performing mini-batch message passing. The latter is more memory efficient, but the former is
     faster.
     """
-    print('Evaluating')
 
     x = data.x
     edge_index = data.edge_index
@@ -450,7 +438,6 @@ def eval_fedgdrop(gcn_c: torch.nn.Module,
 
     if full_batch:
         # perform full batch message passing for evaluation
-
         logits_total, _ = gcn_c(x, edge_index)
         if data.y[mask].dim() == 1:
             predictions = torch.argmax(logits_total, dim=1)[mask].cpu()
@@ -525,7 +512,6 @@ def eval_fedgdrop(gcn_c: torch.nn.Module,
                 node_logits, _ = gcn_gf(x, local_neighborhoods)
                 # Select logits for neighbor nodes only
                 node_logits = node_logits[node_map.map(neighbor_nodes)]
-
                 # Sample top k neighbors using the logits
                 b = Bernoulli(logits=node_logits.squeeze())
                 samples = torch.topk(b.probs, k=args.num_samples, dim=0, sorted=False)[1]

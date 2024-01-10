@@ -161,26 +161,26 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
     clients = []
 
     #TODO: Adjust argument
-    num_indicators = 3 #For Cora only
-    # if args.use_indicators:
-    #     num_indicators = args.sampling_hops + 1
-    # else:
-    #     num_indicators = 0
+    if args.use_indicators: 
+        num_indicators = args.n_hops + 1
+    else:
+        num_indicators = 0
 
+    #Models have 2 hidden layers for a fair comparison with FedPUB
     for idx, ds in enumerate(splitedData.keys()):
         idx_clients[idx] = ds
         dataloader, num_nodes = splitedData[ds]
-        cmodel_nc = GCNv2(num_features, hidden_dims=[args.hidden, num_classes], dropout=args.dropout)
-        cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, 1])
+        cmodel_nc = GCNv2(num_features, hidden_dims=[ args.hidden, args.hidden, num_classes], dropout=args.dropout)
+        cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
         opt_nc = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr)
-        log_z = torch.tensor(0., requires_grad=True)
-        opt_flow = torch.optim.Adam(list(cmodel_flow.parameters()) + [log_z], lr=1e-3)
+        log_z = torch.tensor(args.log_z_init, requires_grad=True)
+        opt_flow = torch.optim.Adam(list(cmodel_flow.parameters()) + [log_z], lr=args.flow_lr)
         
         clients.append(FedGDrop_Client([cmodel_nc,cmodel_flow, log_z], idx, ds, dataloader, num_nodes, num_indicators, [opt_nc, opt_flow], args))
 
     #Create server model
-    smodel_nc = GCNv2(num_features, hidden_dims=[args.hidden, num_classes])
-    smodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, 1])
+    smodel_nc = GCNv2(num_features, hidden_dims=[args.hidden,args.hidden, num_classes])
+    smodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
 
     server = FedGDrop_Server(smodel_nc, smodel_flow, args.device)
 
