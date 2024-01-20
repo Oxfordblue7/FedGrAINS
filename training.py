@@ -45,21 +45,18 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         else:
             np.random.seed(c_round)
             selected_clients = sampling_fn(clients, frac)
-
         for i,client in enumerate(selected_clients):
             print(f"Client {i}")
             # only get weights of graphconv layers
             client.local_train(local_epoch)
             #Loss is acc for Naive FedGDrop
             #For multiclass . 
-            testLoss, testAcc = client.evaluate()
-            globtestLoss, globtestAcc = client.eval_global()
+            # valLoss, valAcc = client.evaluate(key='val')
+            testLoss, testAcc = client.evaluate(key='tst')
             client.stats['testLosses'].append(testLoss)
             client.stats['testAccs'].append(testLoss)
-            client.stats['globtestLosses'].append(globtestLoss)
-            client.stats['globtestAccs'].append(globtestLoss)
+
             wandb.log({f'client-{i}/testLoss' : testLoss , f'client-{i}/testAcc' : testAcc})
-            wandb.log({f'client-{i}/globtestLoss' : globtestLoss , f'client-{i}/globtestAcc' : globtestAcc})
 
         server.aggregate_weights(selected_clients)
         for client in selected_clients:
@@ -71,8 +68,10 @@ def run_fedavg(clients, server, COMMUNICATION_ROUNDS, local_epoch, samp=None, fr
         frame.loc[client.name, 'val_acc'] =  max(client.stats['valAccs'])
         m =  max(client.stats['valAccs'])
         frame.loc[client.name, 'test_acc'] = client.stats['testAccs'][client.stats['valAccs'].index(m)]
-        frame.loc[client.name, 'globtest_acc'] = client.stats['globtestAccs'][client.stats['valAccs'].index(m)]
-
+        # frame.loc[client.name, 'globtest_acc'] = client.stats['globtestAccs'][client.stats['valAccs'].index(m)]
+    #TODO: LOG AVERAGE OVER CLIENTS
+    mean_frame = frame.mean(axis=0)
+    wandb.log({'trainAcc': mean_frame['train_acc'] ,'valAcc' : mean_frame['val_acc'] , 'testAcc' :  mean_frame['test_acc']})
 
     def highlight_max(s):
         is_max = s == s.max()
