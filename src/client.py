@@ -126,10 +126,10 @@ class FedGDrop_Client():
         self.stats['valLosses'].append(val_loss)
         self.stats['valAccs'].append(val_acc)
 
-    def evaluate(self):
+    def evaluate(self, key= 'tst'):
         return eval_fedgdrop(self.nc,self.flow, self.dataLoader['data'], self.args,
                              self.dataLoader['adj'], self.node_map, self.num_ind, self.args.device,
-                             self.dataLoader['data'].test_mask,self.args.eval_on_cpu,loader= self.dataLoader['tst'],
+                             self.dataLoader['data'].test_mask,self.args.eval_on_cpu,loader= self.dataLoader[key],
                             full_batch=self.args.eval_full_batch)
     def eval_global(self):
         return eval_fedgdrop(self.nc,self.flow, self.dataLoader['data'], self.args,
@@ -187,8 +187,7 @@ def train_nc(model, cli_id, dataloader, optimizer, local_epoch, device):
 def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num_nodes, num_ind, node_map, local_epoch, device, args):
 
     #TODO: Delete some vars later for memory
-    nc.to(device)
-    flow.to(device)
+    
     data = dataloader['data']
     train_loader = dataloader['tr']
     if data.y.dim() == 1:
@@ -207,7 +206,8 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
         acc_loss_gfn = 0
         acc_loss_c = 0
         # add a list to collect memory usage
-
+        nc.to(device)
+        flow.to(device)
 
         with tqdm(total=len(train_loader), desc=f'Epoch {epoch}') as bar:
             for batch_id, batch in enumerate(train_loader):
@@ -299,7 +299,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 #TODO: There is a bug in copying models. At some point, nc goes to cpu
                 #Somehow solved with this, but still we should check it .
                 x = data.x[all_nodes].to(device)
-                logits, gcn_mem_alloc = nc(x, edge_indices)
+                logits, _ = nc(x, edge_indices)
 
                 local_target_ids = node_map.map(target_nodes)
                 loss_c = loss_fn(logits[local_target_ids],
@@ -346,7 +346,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
         
         bar.close()
 
-        val_accuracy, val_f1 = eval_fedgdrop(nc,
+    val_accuracy, val_f1 = eval_fedgdrop(nc,
                                       flow,
                                       data,
                                       args,
@@ -359,7 +359,7 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                       loader=dataloader['val'],
                                       full_batch=args.eval_full_batch)
 
-        tr_accuracy, tr_f1 = eval_fedgdrop(nc,
+    tr_accuracy, tr_f1 = eval_fedgdrop(nc,
                                       flow,
                                       data,
                                       args,
