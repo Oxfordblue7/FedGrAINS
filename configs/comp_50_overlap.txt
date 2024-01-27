@@ -9,6 +9,5 @@ k = 53
 reg_param = 0.0
 n_hops =  2
 use_indicators = True
-overlap = True
 local_epoch = 2
 num_rounds = 200 

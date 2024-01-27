@@ -34,9 +34,9 @@ def process_fedavg(clients, server):
     print("Running FedAvg ...")
     frame = run_fedavg(clients, server, args.num_rounds, args.local_epoch, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedavg_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_{args.batch_size}_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
                     help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
-    parser.add_argument('--batch_size', type=int, default=1,
+    parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     parser.add_argument('--algo', help='specify the Federated optimization',
                         type=str, default='fedavg')
     parser.add_argument('--overlap', help='whether clients have overlapped data',
-                        type=bool, default=False)
+                        action = "store_true", default=False)
     parser.add_argument('--convert_x', help='whether to convert original node features to one-hot degree features',
                         type=bool, default=False)
     parser.add_argument('--log_wandb', help='log into wandb or not',
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     )
     # wandb.config.update(args)
     
-
-    outpath = os.path.join(args.outbase, f'{args.dataset}_v2-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
+    #_v2
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 
@@ -174,7 +174,6 @@ if __name__ == '__main__':
 
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
-
     splitedData, num_features, num_classes = setup_devices.prepareData_fedgdrop_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
                                                        mode = 'v2', partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
     print("Done")

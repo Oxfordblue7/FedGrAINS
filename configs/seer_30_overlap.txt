@@ -9,4 +9,3 @@ k = 24
 reg_param =  0.0
 n_hops = 2
 use_indicators = true
-overlap= True
