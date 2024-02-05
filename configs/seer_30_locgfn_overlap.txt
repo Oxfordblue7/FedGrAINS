@@ -1,11 +1,11 @@
 [Params]
 eval_full_batch = True
 eval_on_cpu = True
-log_wandb = False
+log_wandb = True
 log_z_init = 0.0
-loss_coef = 10014.856673759334
-flow_lr = 0.0001704162398491511
-k = 16
+loss_coef = 183
+flow_lr = 0.008709
+k = 23
 reg_param = 0.0
 n_hops =  2
 use_indicators = True
