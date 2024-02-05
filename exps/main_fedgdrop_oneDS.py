@@ -132,6 +132,8 @@ if __name__ == '__main__':
                         help='The logz constant initialization.')
     parser.add_argument('--reg_param', type=float, default=0.,
                         help='Regularization coefficient over')
+    parser.add_argument('--local_flow', help='GFN is not federated',
+                        action = "store_true", default=False)
     try:
         args = parser.parse_args()
     except IOError as msg:
@@ -155,7 +157,9 @@ if __name__ == '__main__':
     # wandb.config.update(args)
     
     #_v2
-    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
+    ov = "overlap" if args.overlap else "disjoint"
+    gfn = "local_gfn" if args.local_flow else "fed_gfn"
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.partition}-{ov}-{args.num_clients}clients-{args.model}-w{gfn}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 

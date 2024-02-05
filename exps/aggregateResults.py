@@ -19,13 +19,16 @@ def _aggregate(inpath, outpath, filename):
 
 
 def average_aggregate_all(args):
-    algos = ['selftrain_NA','selftrain_Dropout' ,'selftrain_DropEdge', 'fedavg_NA','fedavg_Dropout' ,'fedavg_DropEdge', f'fedprox_mu{args.mu}_NA', f'fedprox_mu{args.mu}_Dropout', f'fedprox_mu{args.mu}_DropEdge']
-    dfs = pd.DataFrame(index=algos, columns=['avg-val_acc_mean', 'avg-val_acc_std', 'avg-test_acc_mean', 'avg-test_acc_std', 'avg-glob-test_acc_mean', 'avg-glob-test_acc_std'])
+    #, f'fedprox_mu{args.mu}_NA', f'fedprox_mu{args.mu}_Dropout', f'fedprox_mu{args.mu}_DropEdge'
+    #'selftrain_NA','selftrain_Dropout' ,'selftrain_DropEdge', 'fedavg_NA','fedavg_Dropout' ,
+    # 'avg-glob-test_acc_mean', 'avg-glob-test_acc_std' , 'globtest_acc_mean', 'globtest_acc_std'
+    algos = ['fedavg']
+    dfs = pd.DataFrame(index=algos, columns=['avg-val_acc_mean', 'avg-val_acc_std', 'avg-test_acc_mean', 'avg-test_acc_std'])
     for algo in algos:
-        df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_{args.dropout}_GC.csv'), header=0, index_col=0)
-        df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std', 'globtest_acc_mean', 'globtest_acc_std']]
+        df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_64_GC.csv'), header=0, index_col=0)
+        df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std']]
+        print(df.shape)
         dfs.loc[algo] = list(df.mean())
-        print(algo)
     wandb_agg_df = wandb.Table(dataframe=dfs)
     wandb.log({"aggr_results" : wandb_agg_df})
     outfile = os.path.join(args.outpath, f'avg_accuracy_allAlgos_GC.csv')
@@ -45,9 +48,11 @@ def main_aggregate_all_multiDS(args):
 def main_aggregate_prelim(args):
     """ multiDS: aggregagte all outputs """
     Path(args.outpath).mkdir(parents=True, exist_ok=True)
-    for filename in [f'accuracy_selftrain_NA_{args.dropout}_GC.csv', f'accuracy_selftrain_Dropout_{args.dropout}_GC.csv', f'accuracy_selftrain_DropEdge_{args.dropout}_GC.csv',
-                     f'accuracy_fedavg_NA_{args.dropout}_GC.csv' , f'accuracy_fedavg_Dropout_{args.dropout}_GC.csv' , f'accuracy_fedavg_DropEdge_{args.dropout}_GC.csv',
-                     f'accuracy_fedprox_mu{args.mu}_NA_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_Dropout_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_DropEdge_{args.dropout}_GC.csv']:
+    # f'accuracy_selftrain_NA_{args.dropout}_GC.csv', f'accuracy_selftrain_Dropout_{args.dropout}_GC.csv', f'accuracy_selftrain_DropEdge_{args.dropout}_GC.csv',
+    # f'accuracy_fedavg_NA_{args.dropout}_GC.csv' , f'accuracy_fedavg_Dropout_{args.dropout}_GC.csv' ,
+    #  f'accuracy_fedprox_mu{args.mu}_NA_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_Dropout_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_DropEdge_{args.dropout}_GC.csv'
+
+    for filename in [ f'accuracy_fedavg_64_GC.csv']:
         _aggregate(args.inpath, args.outpath, filename)
 
     """ get average performance for all algorithms """
@@ -57,9 +62,9 @@ def main_aggregate_prelim(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', help='specify the dataset',
-                        type=str, default='Cora', choices=['Cora', 'CiteSeer', 'PubMed', 'biosncv'])
+                        type=str, default='Cora', choices=['Cora', 'CiteSeer', 'PubMed', 'Computers', 'Photo', 'CS', 'Physics'])
     parser.add_argument('--numcli', help='specify the number of clients',
-                        type=int, default=10, choices=[3,5,7,10,20,30,50])
+                        type=int, default=10, choices=[3,5,10,20,30,50])
     parser.add_argument('--mu', help='specify the FedProx parameter',
                         type=float, default=0.001)
     parser.add_argument('--exp_num', type=int, default=0,
@@ -67,13 +72,13 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout rate (1 - keep probability).')
     parser.add_argument('--model', help='specify the model',
-                        type=str, default='GCN')
+                        type=str, default='GCNv2')
     try:
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
-    args.inpath = f'./outputs/raw/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}/repeats'
-    args.outpath = f'./outputs/processed/{args.dataset}-{args.numcli}clients-{args.model}/exp_{args.exp_num}'
+    args.inpath = f'./outputs/raw/{args.dataset}-METIS-overlap-{args.numcli}clients-{args.model}-wlocal_gfn/exp_{args.exp_num}/repeats'
+    args.outpath = f'./outputs/processed/{args.dataset}-METIS-overlap-{args.numcli}clients-{args.model}-wlocal_gfn/exp_{args.exp_num}'
     wandb.init( project = 'fedgdrop',
         name=f'{args.dataset}-{args.numcli}clients-{args.model}-aggr-results-{args.exp_num}' 
     )

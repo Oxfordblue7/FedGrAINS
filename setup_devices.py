@@ -104,6 +104,8 @@ def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, part
         num_classes, num_features = 10, 767
     elif data  == 'Photo':
         num_classes, num_features = 8,745
+    elif data  == 'ogbn-arxiv':
+        num_classes, num_features = 40, 128
     else:
         #MS_academic
         raise Exception("MS Academic not yet implemented!")
@@ -113,8 +115,13 @@ def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, part
     for client_id in range(num_client):
         ds = f'{client_id}-{data}'
         #TODO Get Disjoint or Overlapping argument later
-        #v2 saves only one client data as we operate over trasnductive setting
-        part = torch_load(datapath, f'{data}_disjoint_v2_{partition}/{num_client}/partition_{client_id}.pt')
+        if overlap:
+            #Right now, we'll have only METIS partition for the overlapping case
+            #f'{dataset}_overlapping/{n_comms*n_clien_per_comm}/partition_{comm_id*n_clien_per_comm+client_id}
+            part = torch_load(datapath, f'{data}_overlapping/{num_client}/partition_{client_id}.pt')
+        else:
+            #v2 saves only one client data as we operate over trasnductive setting
+            part = torch_load(datapath, f'{data}_disjoint_v2_{partition}/{num_client}/partition_{client_id}.pt')
         #TODO: Check global test data
         cli_graph = part['client_data']
         client_num_nodes = cli_graph.x.size(dim=0)
@@ -168,12 +175,13 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
 
     #Models have 2 hidden layers for a fair comparison with FedPUB
     for idx, ds in enumerate(splitedData.keys()):
+        print("Model creation for client: ", ds, " ...")
         idx_clients[idx] = ds
         dataloader, num_nodes = splitedData[ds]
         cmodel_nc = GCNv2(num_features, hidden_dims=[ args.hidden, args.hidden, num_classes], dropout=args.dropout)
         cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
         opt_nc = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr)
-        log_z = torch.tensor(args.log_z_init, requires_grad=True)
+        log_z = torch.tensor(float(args.log_z_init), requires_grad=True)
         opt_flow = torch.optim.Adam(list(cmodel_flow.parameters()) + [log_z], lr=args.flow_lr)
         
         clients.append(FedGDrop_Client([cmodel_nc,cmodel_flow, log_z], idx, ds, dataloader, num_nodes, num_indicators, [opt_nc, opt_flow], args))
@@ -182,6 +190,6 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
     smodel_nc = GCNv2(num_features, hidden_dims=[args.hidden,args.hidden, num_classes])
     smodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
 
-    server = FedGDrop_Server(smodel_nc, smodel_flow, args.device)
+    server = FedGDrop_Server(smodel_nc, smodel_flow, args.device, args.local_flow)
 
     return clients, server, idx_clients

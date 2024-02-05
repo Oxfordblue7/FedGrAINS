@@ -86,6 +86,8 @@ class FedGDrop_Client():
         self.opt_flow = optimizer[1]
         self.args = args
 
+        self.local_flow = args.local_flow #Boolean to disable sharing flow with server
+
         self.W_nc = {key: value for key, value in self.nc.named_parameters()}
         self.dW_nc = {key: torch.zeros_like(value) for key, value in self.nc.named_parameters()}
         self.W_nc_old = {key: value.data.clone() for key, value in self.nc.named_parameters()}
@@ -103,8 +105,9 @@ class FedGDrop_Client():
     def download_from_server(self, server):
         for k in server.W_nc:
             self.W_nc[k].data = server.W_nc[k].data.clone()
-        for k in server.W_flow:
-            self.W_flow[k].data = server.W_flow[k].data.clone()
+        if server.W_flow is not None:
+            for k in server.W_flow:
+                self.W_flow[k].data = server.W_flow[k].data.clone()
 
     def cache_weights(self):
         for name in self.W_nc.keys():

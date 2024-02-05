@@ -88,12 +88,14 @@ class Server():
 
 
 class FedGDrop_Server():
-    def __init__(self, nc, flow, device):
+    def __init__(self, nc, flow, device, local_flow = True):
         self.nc = nc.to(device)
         self.flow = flow.to(device)
         self.W_nc = {key: value for key, value in self.nc.named_parameters()}
-        self.W_flow = {key: value for key, value in self.flow.named_parameters()}
         self.model_cache = []
+        self.local_flow = local_flow
+        self.W_flow = None if local_flow else {key: value for key, value in self.flow.named_parameters()}
+
 
     def randomSample_clients(self, all_clients, frac):
         return random.sample(all_clients, int(len(all_clients) * frac))
@@ -106,9 +108,11 @@ class FedGDrop_Server():
         for k in self.W_nc.keys():
             self.W_nc[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_nc[k].data,\
                                                                          client.num_nodes) for client in selected_clients]), dim=0), total_size).clone()
-        for k in self.W_flow.keys():
-            self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data,\
-                                                                         client.num_nodes) for client in selected_clients]), dim=0), total_size).clone()
+        if self.W_flow is not None:
+            print("FedAvg for flow model")
+            for k in self.W_flow.keys():
+                self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data,\
+                                                                            client.num_nodes) for client in selected_clients]), dim=0), total_size).clone()
 
     def aggregate_weights_per(self, selected_clients):
         # pass train_size, and weighted aggregate
@@ -118,9 +122,10 @@ class FedGDrop_Server():
         for k in self.W_nc.keys():
             if 'gcn_layers' in k:
                 self.W_nc[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_nc[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
-        for k in self.W_flow.keys():
-            if 'gcn_layers' in k:
-                self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
+        if self.W_flow is not None:
+            for k in self.W_flow.keys():
+                if 'gcn_layers' in k:
+                    self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
 
     def compute_mean_update_norm(self, cluster):
         cluster_dWs = []
