@@ -71,7 +71,6 @@ class Client_NC():
     def eval_global_prox(self, mu):
         return eval_nc_prox(self.model, self.dataLoader['glob'], self.args.device, mu, self.W_old)
 
-
 class FedGDrop_Client():
     def __init__(self, model, client_id, name, data_loader, num_nodes, num_indicators, optimizer, args):
         self.nc = model[0].to(args.device)
@@ -87,15 +86,21 @@ class FedGDrop_Client():
         self.args = args
 
         self.local_flow = args.local_flow #Boolean to disable sharing flow with server
+        self.W_nc = {key: value.to(args.device) for key, value in self.nc.named_parameters()}
+        self.dW_nc = {key: torch.zeros_like(value).to(args.device) for key, value in self.nc.named_parameters()}
+        self.W_nc_old = {key: value.data.clone().to(args.device) for key, value in self.nc.named_parameters()}
 
-        self.W_nc = {key: value for key, value in self.nc.named_parameters()}
-        self.dW_nc = {key: torch.zeros_like(value) for key, value in self.nc.named_parameters()}
-        self.W_nc_old = {key: value.data.clone() for key, value in self.nc.named_parameters()}
+        self.W_flow = {key: value.to(args.device) for key, value in self.flow.named_parameters()}
+        self.dW_flow = {key: torch.zeros_like(value).to(args.device) for key, value in self.flow.named_parameters()}
+        self.W_flow_old = {key: value.data.clone().to(args.device) for key, value in self.flow.named_parameters()}
+        self.gconvNames = None
 
-        self.W_flow = {key: value for key, value in self.flow.named_parameters()}
-        self.dW_flow = {key: torch.zeros_like(value) for key, value in self.flow.named_parameters()}
-        self.W_flow_old = {key: value.data.clone() for key, value in self.flow.named_parameters()}
-
+        self.weightsNorm = 0.
+        self.gradsNorm = 0.
+        self.convGradsNorm = 0.
+        self.convWeightsNorm = 0.
+        self.convDWsNorm = 0.
+        
         self.node_map = TensorMap(size=num_nodes)
 
         self.stats = {'trainingLosses' :[], 'trainingAccs' :[], 'valLosses': [],
@@ -103,6 +108,7 @@ class FedGDrop_Client():
                       'globtestLosses': [] ,'globtestAccs' :[]}
 
     def download_from_server(self, server):
+        self.gconvNames = server.W_nc.keys()
         for k in server.W_nc:
             self.W_nc[k].data = server.W_nc[k].data.clone()
         if server.W_flow is not None:
@@ -114,6 +120,38 @@ class FedGDrop_Client():
             self.W_nc_old[name].data = self.W_nc[name].data.clone()
         for name in self.W_flow.keys():
             self.W_flow_old[name].data = self.W_flow[name].data.clone()
+
+    def compute_weight_update(self, local_epoch):
+        """ For GCFL """
+        copy(target=self.W_nc_old, source=self.W_nc, keys=self.W_nc.keys())
+        copy(target=self.W_flow_old, source=self.W_flow, keys=self.W_flow.keys())
+
+        tr_loss, tr_acc, val_loss, val_acc =  train_fedgdrop_nc(self.nc, self.flow, self.logz, self.id, self.dataLoader, 
+                                                                self.opt_nc, self.opt_flow, self.num_nodes, self.num_ind,
+                                                                self.node_map, local_epoch, self.args.device, self.args)
+        self.stats['trainingLosses'].append(tr_loss)
+        self.stats['trainingAccs'].append(tr_acc)
+        self.stats['valLosses'].append(val_loss)
+        self.stats['valAccs'].append(val_acc)
+        testLoss, testAcc = self.evaluate(key='tst') #Acc,F1 , testLosses is not important!
+        self.stats['testLosses'].append(testLoss)
+        self.stats['testAccs'].append(testLoss)
+        
+        subtract_(target=self.dW_nc, minuend=self.W_nc, subtrahend=self.W_nc_old)
+        subtract_(target=self.dW_flow, minuend=self.W_flow, subtrahend=self.W_flow_old)
+        self.weightsNorm = torch.norm(flatten(self.W_nc)).item()
+
+        weights_conv = {key: self.W_nc[key] for key in self.gconvNames}
+        self.convWeightsNorm = torch.norm(flatten(weights_conv)).item()
+
+        dWs_conv = {key: self.dW_nc[key] for key in self.gconvNames}
+        self.convDWsNorm = torch.norm(flatten(dWs_conv)).item()
+
+        grads = {key: value.grad for key, value in self.W_nc.items()}
+        self.gradsNorm = torch.norm(flatten(grads)).item()
+
+        grads_conv = {key: self.W_nc[key].grad for key in self.gconvNames}
+        self.convGradsNorm = torch.norm(flatten(grads_conv)).item()
 
     def reset(self):
         copy(target=self.W_nc, source=self.W_nc_old, keys=self.W_nc.keys())
@@ -621,5 +659,10 @@ def eval_nc_prox(model, loader,  device, mu, Wt):
         preds = preds.max(1)[1]
         acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
         return np.mean(lss) , acc
+    
+def subtract_(target, minuend, subtrahend):
+    for name in target:
+        target[name].data = minuend[name].data.to(target[name].data.get_device()).clone() - subtrahend[name].data.to(target[name].data.get_device()).clone()
+
 
     

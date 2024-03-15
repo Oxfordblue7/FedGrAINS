@@ -52,6 +52,60 @@ def process_fedprox(clients, server, mu):
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
+def process_gcfl(clients, server):
+    print("\nDone setting up GCFL devices.")
+    print("Running GCFL ...")
+
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_gcfl_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_GC{suffix}.csv')
+
+    frame = run_gcfl(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1)
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+def process_gcfl_nc(clients, server):
+    print("\nDone setting up GCFL devices.")
+    print("Running GCFL ...")
+
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_gcfl_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_GC{suffix}.csv')
+
+    frame = run_gcfl_nc(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1)
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+def process_gcflplus(clients, server):
+    print("\nDone setting up GCFL devices.")
+    print("Running GCFL plus ...")
+
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_gcflplus_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplus_GC{suffix}.csv')
+
+    frame = run_gcflplus(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1, seq_length = 5, standardize = False)
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+
+def process_gcflplusdWs(clients, server):
+    print("\nDone setting up GCFL devices.")
+    print("Running GCFL plus with dWs ...")
+
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_gcflplusDWs_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplusDWs_GC{suffix}.csv')
+
+    frame = run_gcflplus_dWs(clients, server, args.num_rounds, args.local_epoch, EPS_1, EPS_2, args.seq_length, args.standardize)
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -202,6 +256,14 @@ if __name__ == '__main__':
         process_selftrain(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), local_epoch=args.num_rounds)
     elif args.algo == 'fedavg':
         process_fedavg(clients=init_clients, server=init_server)
-    else:
+    elif args.algo == 'fedprox':
         process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
+    elif args.algo == 'gcfl':
+        process_gcfl(clients=init_clients, server=init_server)
+    elif args.algo == 'gcfl_nc':
+        process_gcfl_nc(clients=init_clients, server=init_server)
+    elif args.algo == 'gcflplus':
+        process_gcflplus(clients=init_clients, server=init_server)
+    else:
+        process_gcflplusdWs(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
     wandb.finish()
