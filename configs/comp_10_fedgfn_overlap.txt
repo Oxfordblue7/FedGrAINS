@@ -1,0 +1,14 @@
+[Params]
+eval_full_batch = true
+eval_on_cpu  = true
+log_wandb = false
+log_z_init  = 0.0
+loss_coef  = 54523
+flow_lr = 0.005483
+k = 28
+reg_param = 0.0
+n_hops = 2
+use_indicators = true
+local_epoch = 2
+num_rounds = 200
+overlap=True
