@@ -10,9 +10,9 @@ from torch_geometric.utils import to_dense_adj, dense_to_sparse
 
 from utils import get_data, split_train, torch_save , louvain_graph_cut
 
-dset= 'Cora'
+dset= 'ogbn-arxiv'
 data_path = '../../../datasets/'
-ratio_train = 0.6
+ratio_train = 0.2
 seed = 2021
 clients = [3, 5, 10, 20]
 

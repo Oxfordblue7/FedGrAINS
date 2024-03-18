@@ -87,7 +87,7 @@ def process_gcflplus(clients, server):
     else:
         outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplus_GC{suffix}.csv')
 
-    frame = run_gcflplus(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1, seq_length = 5, standardize = False)
+    frame = run_gcflplus(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1, seq_length = args.seq_length, standardize = False)
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -192,7 +192,10 @@ if __name__ == '__main__':
         args = parser.parse_args()
     except IOError as msg:
         parser.error(str(msg))
-
+# sh run_fedgdrop_cora.sh 10 1 64 0 0 gcflplus configs/gcflplus_cora_10_fedgfn_disjoint.txt
+# sh run_fedgdrop_seer.sh 20 1 64 0 0 gcflplus configs/gcflplus_seer_20_fedgfn_disjoint.txt
+# sh run_fedgdrop_pubmed.sh 20 1 64 0 0 gcflplus configs/gcflplus_med_20_fedgfn_disjoint.txt
+        #  sh run_fedgdrop_amazon.sh 20 1 64 Computers 0 0 gcflplus configs/gcflplus_comp_20_fedgfn_disjoint.txt 
     if args.config_file:
         config = configparser.ConfigParser()
         config.read(args.config_file)
@@ -213,7 +216,7 @@ if __name__ == '__main__':
     #_v2
     ov = "overlap" if args.overlap else "disjoint"
     gfn = "local_gfn" if args.local_flow else "fed_gfn"
-    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.partition}-{ov}-{args.num_clients}clients-{args.model}-w{gfn}/exp_{args.exp_num}')
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.algo}-{args.partition}-{ov}-{args.num_clients}clients-{args.model}-w{gfn}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 

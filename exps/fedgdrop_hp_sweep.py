@@ -26,7 +26,6 @@ def process_fedavg(clients, server, args = None):
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
-
 def process_gcfl(clients, server, args = None):
     print("\nDone setting up GCFL devices.")
     print("Running GCFL ...")
