@@ -6,10 +6,12 @@ from pathlib import Path
 
 def _aggregate(inpath, outpath, filename):
     dfs = []
+    print(filename)
     for file in os.listdir(inpath):
         print(file)
         if file.endswith(filename):
             dfs.append(pd.read_csv(os.path.join(inpath, file), header=0, index_col=0))
+    print(dfs)
     df = pd.concat(dfs)
     group = df.groupby(df.index)
     dfmean = group.mean()
@@ -22,10 +24,10 @@ def average_aggregate_all(args):
     #, f'fedprox_mu{args.mu}_NA', f'fedprox_mu{args.mu}_Dropout', f'fedprox_mu{args.mu}_DropEdge'
     #'selftrain_NA','selftrain_Dropout' ,'selftrain_DropEdge', 'fedavg_NA','fedavg_Dropout' ,
     # 'avg-glob-test_acc_mean', 'avg-glob-test_acc_std' , 'globtest_acc_mean', 'globtest_acc_std'
-    algos = ['gcflplus']
+    algos = ['fedavg']
     dfs = pd.DataFrame(index=algos, columns=['avg-val_acc_mean', 'avg-val_acc_std', 'avg-test_acc_mean', 'avg-test_acc_std'])
     for algo in algos:
-        df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_GC.csv'), header=0, index_col=0)
+        df = pd.read_csv(os.path.join(args.outpath, f'accuracy_{algo}_64_GC.csv'), header=0, index_col=0)
         df = df[['val_acc_mean', 'val_acc_std', 'test_acc_mean', 'test_acc_std']]
         print(df.shape)
         dfs.loc[algo] = list(df.mean())
@@ -52,7 +54,7 @@ def main_aggregate_prelim(args):
     # f'accuracy_fedavg_NA_{args.dropout}_GC.csv' , f'accuracy_fedavg_Dropout_{args.dropout}_GC.csv' ,
     #  f'accuracy_fedprox_mu{args.mu}_NA_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_Dropout_{args.dropout}_GC.csv', f'accuracy_fedprox_mu{args.mu}_DropEdge_{args.dropout}_GC.csv'
 
-    for filename in [ f'accuracy_gcflplus_GC.csv']:
+    for filename in [ f'accuracy_fedavg_64_GC.csv']:
         _aggregate(args.inpath, args.outpath, filename)
 
     """ get average performance for all algorithms """

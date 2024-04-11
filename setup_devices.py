@@ -91,9 +91,7 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, mode, partition= "M
 
 def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, partition= "METIS", seed=None, overlap=False):
 
-    # random.seed(seed)
-    # np.random.seed(seed)
-    # torch.manual_seed(seed)
+
     if data  == "Cora":
         num_classes, num_features = 7, 1433 
     elif data  == "CiteSeer":
@@ -167,6 +165,8 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
     idx_clients = {}
     clients = []
 
+    model = MaskedGCNv2 if args.algo == "fedpub" else GCNv2
+
     #TODO: Adjust argument
     if args.use_indicators: 
         num_indicators = args.n_hops + 1
@@ -178,7 +178,7 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
         print("Model creation for client: ", ds, " ...")
         idx_clients[idx] = ds
         dataloader, num_nodes = splitedData[ds]
-        cmodel_nc = GCNv2(num_features, hidden_dims=[ args.hidden, args.hidden, num_classes], dropout=args.dropout)
+        cmodel_nc = model(num_features, hidden_dims=[ args.hidden, args.hidden, num_classes], dropout=args.dropout, args = args)
         cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
         opt_nc = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr)
         log_z = torch.tensor(float(args.log_z_init), requires_grad=True)
@@ -187,7 +187,7 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
         clients.append(FedGDrop_Client([cmodel_nc,cmodel_flow, log_z], idx, ds, dataloader, num_nodes, num_indicators, [opt_nc, opt_flow], args))
 
     #Create server model
-    smodel_nc = GCNv2(num_features, hidden_dims=[args.hidden,args.hidden, num_classes])
+    smodel_nc = model(num_features, hidden_dims=[args.hidden,args.hidden, num_classes], args = args)
     smodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
 
     server = FedGDrop_Server(smodel_nc, smodel_flow, args.device, args.local_flow)

@@ -40,6 +40,30 @@ def process_fedavg(clients, server):
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
+def process_pfedavg(clients, server, num_features):
+    print("\nDone setting up PerFedAvg devices.")
+
+    print("Running Per-FedAvg ...")
+    frame = run_pfedavg(clients, server, args.num_rounds, args.local_epoch, samp=None, n_feats = num_features)
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_pfedavg_{args.batch_size}_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_pfedavg_{args.batch_size}_GC{suffix}.csv')
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+def process_fedpub(clients, server, num_features):
+    print("\nDone setting up PerFedAvg devices.")
+
+    print("Running FedPUB...")
+    frame = run_fedpub(clients, server, args.num_rounds, args.local_epoch, samp=None, n_feats = num_features)
+    if args.repeat is None:
+        outfile = os.path.join(outpath, f'accuracy_fedpub_{args.batch_size}_GC{suffix}.csv')
+    else:
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedpub_{args.batch_size}_GC{suffix}.csv')
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
 def process_fedprox(clients, server, mu):
     print("\nDone setting up FedProx devices.")
 
@@ -91,21 +115,6 @@ def process_gcflplus(clients, server):
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
-
-def process_gcflplusdWs(clients, server):
-    print("\nDone setting up GCFL devices.")
-    print("Running GCFL plus with dWs ...")
-
-    if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_gcflplusDWs_GC{suffix}.csv')
-    else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplusDWs_GC{suffix}.csv')
-
-    frame = run_gcflplus_dWs(clients, server, args.num_rounds, args.local_epoch, EPS_1, EPS_2, args.seq_length, args.standardize)
-    frame.to_csv(outfile)
-    print(f"Wrote to file: {outfile}")
-
-
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -151,6 +160,8 @@ if __name__ == '__main__':
                         type=str, default='Cora')
     parser.add_argument('--model', help='specify the model',
                         type=str, default='GCN')
+    parser.add_argument('--laye-mask-one', action='store_true', default=False)
+    parser.add_argument('--clsf-mask-one', action='store_true', default=False)
     parser.add_argument('--algo', help='specify the Federated optimization',
                         type=str, default='fedavg')
     parser.add_argument('--overlap', help='whether clients have overlapped data',
@@ -161,6 +172,8 @@ if __name__ == '__main__':
                         type=bool, default=False)
     parser.add_argument('--num_clients', help='number of clients',
                         type=int, default=10)
+    parser.add_argument('--l1', type=float, default=1e-3)
+
     
     parser.add_argument("-c", "--config_file", type=str, help='Config file')
 
@@ -261,6 +274,10 @@ if __name__ == '__main__':
         process_fedavg(clients=init_clients, server=init_server)
     elif args.algo == 'fedprox':
         process_fedprox(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server), mu=args.mu)
+    elif args.algo == 'pfedavg':
+        process_pfedavg(clients=init_clients, server=init_server, num_features = num_features)
+    elif args.algo == 'fedpub':
+        process_fedpub(clients=init_clients, server=init_server, num_features = num_features)
     elif args.algo == 'gcfl':
         process_gcfl(clients=init_clients, server=init_server)
     elif args.algo == 'gcfl_nc':
@@ -268,5 +285,5 @@ if __name__ == '__main__':
     elif args.algo == 'gcflplus':
         process_gcflplus(clients=init_clients, server=init_server)
     else:
-        process_gcflplusdWs(clients=copy.deepcopy(init_clients), server=copy.deepcopy(init_server))
+        print("Quit")
     wandb.finish()

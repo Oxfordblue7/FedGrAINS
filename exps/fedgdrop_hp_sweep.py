@@ -26,6 +26,16 @@ def process_fedavg(clients, server, args = None):
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
+def process_pfedavg(clients, server, num_features, args = None):
+    print("\nDone setting up PerFedAvg devices.")
+
+    print("Running Per-FedAvg ...")
+    frame = run_pfedavg(clients, server, args.num_rounds, args.local_epoch, samp=None, n_feats = num_features)
+    outfile = os.path.join(args.outpath, f'accuracy_pfedavg_{args.batch_size}_GC{args.suffix}.csv')
+    frame.to_csv(outfile)
+    print(f"Wrote to file: {outfile}")
+
+
 def process_gcfl(clients, server, args = None):
     print("\nDone setting up GCFL devices.")
     print("Running GCFL ...")
@@ -168,6 +178,8 @@ def main_sweep(config= None):
         process_gcfl(clients=init_clients, server=init_server, args =args)
     elif args.algo == 'gcfl_nc':
         process_gcfl_nc(clients=init_clients, server=init_server, args =args)
+    elif args.algo == 'pfedavg':
+        process_pfedavg(clients=init_clients, server=init_server, num_features = num_features, args =args)
     else:
         process_gcflplus(clients=init_clients, server=init_server, args =args)
     

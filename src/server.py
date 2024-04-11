@@ -105,6 +105,7 @@ class FedGDrop_Server():
         self.local_flow = local_flow
         self.W_flow = None if local_flow else {key: value for key, value in self.flow.named_parameters()}
 
+    
 
     def randomSample_clients(self, all_clients, frac):
         return random.sample(all_clients, int(len(all_clients) * frac))
@@ -154,6 +155,22 @@ class FedGDrop_Server():
             for k in self.W_flow.keys():
                 if 'gcn_layers' in k:
                     self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data, client.train_size) for client in selected_clients]), dim=0), total_size).clone()
+
+    def aggregate_weights_perv2(self, selected_clients, sim_mat):
+        # pass train_size, and weighted aggregate
+        total_size = 0
+        for j, client in enumerate(selected_clients):
+            total_size += client.num_nodes
+            for k in client.W_nc.keys():
+                if 'gcn_layers' in k:
+                    client.W_nc[k].data = torch.sum(torch.stack([torch.mul(client.W_nc[k].data, sim_mat[j,i]) for i,client in enumerate(selected_clients)]), dim=0).clone()
+        
+        if self.W_flow is not None:
+            print("FedAvg for flow model")
+            for k in self.W_flow.keys():
+                self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data,\
+                                                                            client.num_nodes) for client in selected_clients]), dim=0), total_size).clone()
+
 
     def compute_mean_update_norm(self, cluster):
         cluster_dWs = []
@@ -210,7 +227,6 @@ class FedGDrop_Server():
                               {name: params[name].data.clone() for name in params},
                               [accuracies[i] for i in idcs])]
         
-
     def min_cut(self, similarity, idc):
         g = nx.Graph()
         for i in range(len(similarity)):
@@ -233,6 +249,7 @@ def pairwise_angles(sources):
             angles[i, j] = torch.true_divide(torch.sum(s1 * s2), max(torch.norm(s1) * torch.norm(s2), 1e-12)) + 1
 
     return angles.numpy()
+
 
 def reduce_add_average(targets, sources, total_size):
     for target in targets:

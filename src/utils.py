@@ -4,21 +4,22 @@ import pickle
 import random
 import time
 import torch
-import scipy.sparse as sp
+import numpy as np
+import networkx as nx
 from torch import Tensor
+import scipy.sparse as sp
+from typing import Tuple, Dict
+import torch.nn.functional as F
 from torch_geometric.data import Data
 import torch_geometric.transforms as T
 import torch_geometric.datasets as datasets
 from torch.distributions import Bernoulli, Gumbel
 from ogb.nodeproppred import PygNodePropPredDataset
 from torch_geometric.utils import to_networkx, degree, subgraph, to_scipy_sparse_matrix
-import torch.nn.functional as F
+
 #from community import community_louvain
-import numpy as np
 from sklearn.model_selection import train_test_split
 from torch_geometric.transforms import BaseTransform
-
-from typing import Tuple, Dict
 
 
 def torch_save(base_dir, filename, data):
@@ -131,7 +132,6 @@ def get_stats(df, ds, graphs_train, graphs_val=None, graphs_test=None):
 
     return df
 
-
 def sample_neighborhoods_from_probs(logits: torch.Tensor,
                                     neighbor_nodes: torch.Tensor,
                                     num_samples: int = -1
@@ -191,7 +191,6 @@ def sample_neighborhoods_from_probs(logits: torch.Tensor,
 
     return neighbor_nodes, b.log_prob(mask), stats_dict
 
-
 def get_neighborhoods(nodes: Tensor,
                       adjacency: sp.csr_matrix
                       ) -> Tensor:
@@ -201,7 +200,6 @@ def get_neighborhoods(nodes: Tensor,
                                  torch.tensor(neighborhood.col)],
                                 dim=0)
     return neighborhoods
-
 
 def slice_adjacency(adjacency: sp.csr_matrix, rows: Tensor, cols: Tensor):
     """Selects a block from a sparse adjacency matrix, given the row and column
@@ -214,6 +212,18 @@ def slice_adjacency(adjacency: sp.csr_matrix, rows: Tensor, cols: Tensor):
                               cols[slice.col]],
                              dim=0)
     return edge_index
+
+def get_sparsity(masks, l1):
+    n_active, n_total = 0, 1
+    for mask in masks:
+        pruned = torch.abs(mask) < l1
+        mask = torch.ones(mask.shape).cuda().masked_fill(pruned, 0)
+        n_active += torch.sum(mask)
+        _n_total = 1
+        for s in mask.shape:
+            _n_total *= s 
+        n_total += _n_total
+    return ((n_total-n_active)/n_total).item()
 
 
 class TensorMap:

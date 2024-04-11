@@ -6,7 +6,7 @@ import numpy as np
 import torch_geometric
 from torch.distributions import Bernoulli, Gumbel
 from sklearn.metrics import accuracy_score, f1_score
-from .utils import get_neighborhoods, sample_neighborhoods_from_probs, slice_adjacency, TensorMap
+from .utils import get_sparsity, get_neighborhoods, sample_neighborhoods_from_probs, slice_adjacency, TensorMap
 
 class Client_NC():
     def __init__(self, model, client_id, name, data_loader, train_size, optimizer, args):
@@ -167,6 +167,16 @@ class FedGDrop_Client():
         self.stats['valLosses'].append(val_loss)
         self.stats['valAccs'].append(val_acc)
 
+    def local_masked_train(self, local_epoch):
+        """ Masked training for each client"""
+        tr_loss, tr_acc, val_loss, val_acc =  train_fedgdrop_nc(self.nc, self.flow, self.logz, self.id, self.dataLoader, 
+                                                                self.opt_nc, self.opt_flow, self.num_nodes, self.num_ind,
+                                                                self.node_map, local_epoch, self.args.device, self.args)
+        self.stats['trainingLosses'].append(tr_loss)
+        self.stats['trainingAccs'].append(tr_acc)
+        self.stats['valLosses'].append(val_loss)
+        self.stats['valAccs'].append(val_acc)
+
     def evaluate(self, key= 'tst'):
         return eval_fedgdrop(self.nc,self.flow, self.dataLoader['data'], self.args,
                              self.dataLoader['adj'], self.node_map, self.num_ind, self.args.device,
@@ -228,6 +238,11 @@ def train_nc(model, cli_id, dataloader, optimizer, local_epoch, device):
 def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num_nodes, num_ind, node_map, local_epoch, device, args):
 
     #TODO: Delete some vars later for memory
+
+    if args.algo == "fedpub":
+        masks = []
+        for name, param in nc.state_dict().items():
+            if 'mask' in name: masks.append(param) 
     
     data = dataloader['data']
     train_loader = dataloader['tr']
@@ -345,6 +360,9 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                 local_target_ids = node_map.map(target_nodes)
                 loss_c = loss_fn(logits[local_target_ids],
                                  data.y[target_nodes].to(device)) + args.reg_param *torch.sum(torch.var(logits, dim=1))
+                for name, param in nc.state_dict().items():
+                    if 'mask' in name:
+                        loss_c += torch.norm(param.float(), 1) * args.l1
 
                 opt_nc.zero_grad()
 
@@ -368,7 +386,8 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                            f'client-{cli_id}/batch_loss_c': batch_loss_c,
                            f'client-{cli_id}/log_z': log_z,
                            f'client-{cli_id}/-log_probs': -torch.sum(torch.cat(log_probs, dim=0))})
-
+                if args.algo =="fedpub":
+                    wandb.log({f'client-{cli_id}/sparsity': get_sparsity(masks, args.l1)})
                 log_dict = {}
                 for i, statistics in enumerate(all_statistics):
                     for key, value in statistics.items():
@@ -384,36 +403,21 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
                                  'log_probs': torch.sum(torch.cat(log_probs, dim=0)).item()})
                 bar.update()
 
-        
         bar.close()
 
-    val_accuracy, val_f1 = eval_fedgdrop(nc,
-                                      flow,
-                                      data,
-                                      args,
-                                      adjacency,
-                                      node_map,
-                                      num_ind,
-                                      device,
-                                      data.val_mask,
-                                      args.eval_on_cpu,
-                                      loader=dataloader['val'],
-                                      full_batch=args.eval_full_batch)
+    val_accuracy, val_f1 = eval_fedgdrop(nc, flow, data, args, adjacency, node_map,
+                                         num_ind, device, data.val_mask, args.eval_on_cpu,
+                                        loader=dataloader['val'], full_batch=args.eval_full_batch)
 
-    tr_accuracy, tr_f1 = eval_fedgdrop(nc,
-                                      flow,
-                                      data,
-                                      args,
-                                      adjacency,
-                                      node_map,
-                                      num_ind,
-                                      device,
-                                      data.train_mask,
-                                      args.eval_on_cpu,
-                                      loader=dataloader['tr'],
-                                      full_batch=args.eval_full_batch)
+    tr_accuracy, tr_f1 = eval_fedgdrop(nc, flow, data, args, adjacency, node_map, num_ind,
+                                       device, data.train_mask, args.eval_on_cpu,
+                                       loader=dataloader['tr'], full_batch=args.eval_full_batch)
         
     return tr_accuracy, tr_f1, val_accuracy, val_f1
+
+
+
+
 
 
 @torch.no_grad()

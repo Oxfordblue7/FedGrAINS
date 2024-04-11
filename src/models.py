@@ -5,33 +5,6 @@ from torch_sparse import SparseTensor
 from torch_geometric.typing import Adj
 from torch_geometric.nn import GCNConv, SAGEConv, GATConv
 from typing import Union
-"""
-Unified DropBlock Module for Dropout, DropEdge, and DropNode
-"""
-class DropBlock:
-    def __init__(self, dropping_method: str):
-        super(DropBlock, self).__init__()
-        self.dropping_method = dropping_method
-
-    def drop(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
-        if self.dropping_method == 'DropNode':
-            x = x * torch.bernoulli(torch.ones(x.size(0), 1) - drop_rate).to(x.device)
-            x = x / (1 - drop_rate)
-        elif self.dropping_method == 'DropEdge':
-            edge_reserved_size = int(edge_index.size(1) * (1 - drop_rate))
-            if isinstance(edge_index, SparseTensor):
-                row, col, _ = edge_index.coo()
-                edge_index = torch.stack((row, col))
-            perm = torch.randperm(edge_index.size(1))
-            edge_index = edge_index.t()[perm][:edge_reserved_size].t()
-        elif self.dropping_method == 'Dropout':
-            x = F.dropout(x, drop_rate)
-        else:
-            #The case where we do not employ dropout methods at all 
-            return x, edge_index
-
-        return x, edge_index
-
 
 """
 Server Models
@@ -105,10 +78,9 @@ Client Models
 #         return F.nll_loss(pred, label)
 
 class GCN(torch.nn.Module):
-    def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0):
+    def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0, args : dict = None):
         super(GCN, self).__init__()
         self.dropping_method = dropping_method
-        self.drop_block = DropBlock(dropping_method)
         self.drop_rate = drop_rate
         self.edge_weight = None
         self.graph_convs = torch.nn.ModuleList()
@@ -118,9 +90,6 @@ class GCN(torch.nn.Module):
         self.classifier = torch.nn.Linear(nhid, ncls)
 
     def forward(self, x: Tensor, edge_index: Adj):
-        if self.training:
-            if self.dropping_method != "Dropout":
-                x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
         for l in range(len(self.graph_convs)):
             x = self.graph_convs[l](x, edge_index)
             x = F.relu(x)
@@ -131,6 +100,30 @@ class GCN(torch.nn.Module):
 
     def loss(self, pred, label):
         return F.cross_entropy(pred, label)
+
+class MaskedGCN(torch.nn.Module):
+    def __init__(self, n_feat=10, n_dims=128, n_clss=10, l1=1e-3, args=None):
+        super().__init__()
+        self.n_feat = n_feat
+        self.n_dims = n_dims
+        self.n_clss = n_clss
+        self.args = args
+        
+        from layers import MaskedGCNConv, MaskedLinear
+        self.conv1 = MaskedGCNConv(self.n_feat, self.n_dims, cached=False, l1=l1, args=args)
+        self.conv2 = MaskedGCNConv(self.n_dims, self.n_dims, cached=False, l1=l1, args=args)
+        self.clsif = MaskedLinear(self.n_dims, self.n_clss, l1=l1, args=args)
+
+    def forward(self, data, is_proxy=False):
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_attr
+        x = F.relu(self.conv1(x, edge_index, edge_weight))
+        x = F.dropout(x, training=self.training)
+        x = self.conv2(x, edge_index, edge_weight)
+        if is_proxy == True: return x
+        x = F.relu(x)
+        x = F.dropout(x, training=self.training)
+        x = self.clsif(x)
+        return x
 
 class GCNv2(torch.nn.Module):
     def __init__(self,
@@ -150,13 +143,15 @@ class GCNv2(torch.nn.Module):
     def forward(self,
                 x: torch.Tensor,
                 edge_index: Union[torch.Tensor, list[torch.Tensor]],
-                ) -> torch.Tensor:
+                proxy: bool = False) -> torch.Tensor:
         layerwise_adjacency = type(edge_index) == list
 
         for i, layer in enumerate(self.gcn_layers[:-1], start=1):
             edges = edge_index[-i] if layerwise_adjacency else edge_index
             x = torch.relu(layer(x, edges))
             x = F.dropout(x, p=self.dropout, training=self.training)
+        if proxy:
+            return x
 
         edges = edge_index[0] if layerwise_adjacency else edge_index
         logits = self.gcn_layers[-1](x, edges)
@@ -168,11 +163,48 @@ class GCNv2(torch.nn.Module):
         return logits, memory_alloc
 
 
+class MaskedGCNv2(torch.nn.Module):
+    def __init__(self,
+                 in_features: int,
+                 hidden_dims: list[int], dropout: float=0. , l1: float=1e-3, args : dict = None):
+        super(MaskedGCNv2, self).__init__()
+        from .layers import MaskedGCNConv
+        self.dropout = dropout
+        dims = [in_features] + hidden_dims
+        gcn_layers = []
+        for i in range(len(hidden_dims) - 1):
+            gcn_layers.append(MaskedGCNConv(in_channels=dims[i],
+                                            out_channels=dims[i + 1],cached=False, l1=l1, args = args) )
+
+        gcn_layers.append(MaskedGCNConv(in_channels=dims[-2], out_channels=dims[-1], l1=l1, args =args))
+        self.gcn_layers = torch.nn.ModuleList(gcn_layers)
+
+    def forward(self,
+                x: torch.Tensor,
+                edge_index: Union[torch.Tensor, list[torch.Tensor]],
+                proxy: bool = False) -> torch.Tensor:
+        layerwise_adjacency = type(edge_index) == list
+
+        for i, layer in enumerate(self.gcn_layers[:-1], start=1):
+            edges = edge_index[-i] if layerwise_adjacency else edge_index
+            x = torch.relu(layer(x, edges))
+            x = F.dropout(x, p=self.dropout, training=self.training)
+        if proxy:
+            return x
+
+        edges = edge_index[0] if layerwise_adjacency else edge_index
+        logits = self.gcn_layers[-1](x, edges)
+        logits = F.dropout(logits, p=self.dropout, training=self.training)
+
+        # torch.cuda.synchronize()
+        memory_alloc = torch.cuda.memory_allocated() / (1024 * 1024)
+
+        return logits, memory_alloc
+
 class SAGE(torch.nn.Module):
     def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0):
         super(SAGE, self).__init__()
         self.dropping_method = dropping_method
-        self.drop_block = DropBlock(dropping_method)
         self.drop_rate = drop_rate
         self.nlayer = nlayer
         self.graph_convs = torch.nn.ModuleList()
@@ -182,9 +214,6 @@ class SAGE(torch.nn.Module):
         self.classifier = torch.nn.Linear(nhid, ncls)
 
     def forward(self, x: Tensor, edge_index: Adj):
-        if self.training:
-            if self.dropping_method != "Dropout":
-                x, edge_index = self.drop_block.drop(x, edge_index, self.drop_rate)
         for l in range(len(self.graph_convs)):
             x = self.graph_convs[l](x, edge_index)
             x = F.relu(x)
