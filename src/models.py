@@ -18,15 +18,6 @@ class serverSAGE(torch.nn.Module):
             self.graph_convs.append(SAGEConv(nhid, nhid))
         self.classifier = torch.nn.Linear(nhid, ncls)
 
-# class serverGAT(torch.nn.Module):
-#     def __init__(self, nlayer, nfeat, nhid, ncls):
-#         super(serverGAT, self).__init__()
-#         self.graph_convs = torch.nn.ModuleList()
-#         self.graph_convs.append(GATConv(nfeat, nhid))
-#         for l in range(nlayer - 1):
-#             self.graph_convs.append(GATConv(nhid, nhid))
-#         self.classifier = torch.nn.Linear(nhid, ncls)
-
 class serverGCN(torch.nn.Module):
     def __init__(self, nlayer, nfeat, nhid, ncls):
         super(serverGCN, self).__init__()
@@ -54,28 +45,6 @@ class serverGCNv2(torch.nn.Module):
 """
 Client Models
 """
-# class GAT(torch.nn.Module):
-#     def __init__(self, in_channels, out_channels, dropping_method: str = "DropEdge", heads=2):
-#         super(GAT, self).__init__()
-#         self.dropping_method = dropping_method
-#         self.drop_block = DropBlock(dropping_method)
-#
-#         self.conv1 = GATConv(in_channels, heads, heads=heads)
-#         # On the Pubmed dataset, use heads=8 in conv2.
-#         self.conv2 = GATConv(heads * heads, out_channels, heads=1, concat=False, dropout=0.6)
-#         self.nclass = out_channels
-#
-#     def forward(self, x: Tensor, edge_index: Adj, drop_rate: float = 0):
-#
-#         if self.training:
-#             x, edge_index = self.drop_block.drop(x, edge_index, drop_rate)
-#
-#         x = F.elu(self.conv1(x, edge_index))
-#         x = self.conv2(x, edge_index)
-#         return F.log_softmax(x, dim=-1)
-#
-#     def loss(self, pred, label):
-#         return F.nll_loss(pred, label)
 
 class GCN(torch.nn.Module):
     def __init__(self, nlayer, nfeat, nhid, ncls, dropping_method: str = "DropEdge", drop_rate: float = 0, args : dict = None):
@@ -175,7 +144,7 @@ class MaskedGCNv2(torch.nn.Module):
         for i in range(len(hidden_dims) - 1):
             gcn_layers.append(MaskedGCNConv(in_channels=dims[i],
                                             out_channels=dims[i + 1],cached=False, l1=l1, args = args) )
-
+        #TODO: Check Later
         gcn_layers.append(MaskedGCNConv(in_channels=dims[-2], out_channels=dims[-1], l1=l1, args =args))
         self.gcn_layers = torch.nn.ModuleList(gcn_layers)
 

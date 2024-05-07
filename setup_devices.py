@@ -42,7 +42,7 @@ def _split_train(data, train_ratio = 0.2):
     data.val_mask[val_indices] = True
     return data
 
-def prepareData_oneDS(datapath, data, num_client, batchSize, mode, partition= "METIS", seed=None, overlap=False):
+def prepareData_oneDS(datapath, data, num_client, batchSize, partition= "METIS", seed=None, overlap=False):
 
     # random.seed(seed)
     # np.random.seed(seed)
@@ -69,27 +69,27 @@ def prepareData_oneDS(datapath, data, num_client, batchSize, mode, partition= "M
     for client_id in range(num_client):
         ds = f'{client_id}-{data}'
         #TODO Get Disjoint or Overlapping argument later
-        partition = torch_load(datapath, f'{data}_disjoint_{mode}_{partition}/{num_client}/partition_{client_id}.pt')
+        partition = torch_load(datapath, f'{data}_disjoint_{partition}/{num_client}/partition_{client_id}.pt')
         #TODO: Check global test data
         global_d = get_data(data, datapath)
         tr, val, tst = partition['client_tr'], partition['client_val'] , partition['client_tst']
         client_num_nodes = tr.x.size(dim=0)
         #Generate dataloaders
         trloader =  DataLoader(dataset= [tr], batch_size=batchSize, 
-                                 shuffle=False, pin_memory=False)
+                                 shuffle=True, pin_memory=False)
         valloader =  DataLoader(dataset= [val], batch_size=batchSize, 
-                                 shuffle=False, pin_memory=False)
+                                 shuffle=True, pin_memory=False)
         tstloader =  DataLoader(dataset= [tst], batch_size=batchSize, 
-                                 shuffle=False, pin_memory=False)
+                                 shuffle=True, pin_memory=False)
         globloader =  DataLoader(dataset= [global_d], batch_size=batchSize, 
-                                 shuffle=False, pin_memory=False)
+                                 shuffle=True, pin_memory=False)
 
         splitedData[ds] = ({'tr': trloader, 'val': valloader, 'tst' : tstloader , 'glob' : globloader}, client_num_nodes)
         #df = get_stats(df, ds, train_data, graphs_val=val_data, graphs_test=test_data)
 
     return splitedData, num_features, num_classes
 
-def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, partition= "METIS", seed=None, overlap=False):
+def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, partition= "METIS", seed=None, overlap=False):
 
 
     if data  == "Cora":
@@ -119,7 +119,7 @@ def prepareData_fedgdrop_oneDS(datapath, data, num_client, batchSize, mode, part
             part = torch_load(datapath, f'{data}_overlapping/{num_client}/partition_{client_id}.pt')
         else:
             #v2 saves only one client data as we operate over trasnductive setting
-            part = torch_load(datapath, f'{data}_disjoint_v2_{partition}/{num_client}/partition_{client_id}.pt')
+            part = torch_load(datapath, f'{data}_disjoint_{partition}/{num_client}/partition_{client_id}.pt')
         #TODO: Check global test data
         cli_graph = part['client_data']
         client_num_nodes = cli_graph.x.size(dim=0)
@@ -167,11 +167,7 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
 
     model = MaskedGCNv2 if args.algo == "fedpub" else GCNv2
 
-    #TODO: Adjust argument
-    if args.use_indicators: 
-        num_indicators = args.n_hops + 1
-    else:
-        num_indicators = 0
+    num_indicators = args.n_hops + 1 if args.use_indicators else 0
 
     #Models have 2 hidden layers for a fair comparison with FedPUB
     for idx, ds in enumerate(splitedData.keys()):
@@ -180,7 +176,7 @@ def setup_fedgdrop_devices(splitedData, num_features, num_classes, args):
         dataloader, num_nodes = splitedData[ds]
         cmodel_nc = model(num_features, hidden_dims=[ args.hidden, args.hidden, num_classes], dropout=args.dropout, args = args)
         cmodel_flow = GCNv2(num_features + num_indicators,hidden_dims=[args.hidden, args.hidden, 1])
-        opt_nc = torch.optim.Adam(cmodel_nc.parameters(), lr=args.lr)
+        opt_nc = torch.optim.Adam(filter(lambda p: p.requires_grad, cmodel_nc.parameters()), lr=args.lr)
         log_z = torch.tensor(float(args.log_z_init), requires_grad=True)
         opt_flow = torch.optim.Adam(list(cmodel_flow.parameters()) + [log_z], lr=args.flow_lr)
         

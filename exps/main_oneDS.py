@@ -22,9 +22,9 @@ def process_selftrain(clients, server, local_epoch):
     for k, v in allAccs.items():
         df.loc[k, [f'train_acc', f'val_acc', f'test_acc', f'globtest_acc']] = v
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_selftrain_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_GC{suffix}.csv')
     df.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -34,9 +34,9 @@ def process_fedavg(clients, server):
     print("Running FedAvg ...")
     frame = run_fedavg(clients, server, args.num_rounds, args.local_epoch, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedavg_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedavg_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -46,9 +46,9 @@ def process_fedprox(clients, server, mu):
     print("Running FedProx ...")
     frame = run_fedprox(clients, server, args.num_rounds, args.local_epoch, mu, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -81,8 +81,6 @@ if __name__ == '__main__':
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
-    parser.add_argument('--natural_split', help='use public split to partition',
-                        type=bool, default=False)
     parser.add_argument('--partition', help='Graph partitioning algorithm',
                         type=str, default="METIS")
     parser.add_argument('--datapath', type=str, default='../datasets',
@@ -114,15 +112,14 @@ if __name__ == '__main__':
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     print(args.natural_split)
-    args.mode = "v1" if not args.natural_split else "v2"
     print(args.mode)
     wandb.init( project = 'fedgdrop',
-        name=f'{args.dataset}_{args.mode}-{args.num_clients}clients-{args.model}-{args.algo}-{args.dropping_method}' 
+        name=f'{args.dataset}-{args.num_clients}clients-{args.model}-{args.algo}-{args.dropping_method}' 
     )
     wandb.config.update(args)
     
 
-    outpath = os.path.join(args.outbase, f'{args.dataset}_{args.mode}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
+    outpath = os.path.join(args.outbase, f'{args.dataset}-{args.num_clients}clients-{args.model}/exp_{args.exp_num}')
     Path(outpath).mkdir(parents=True, exist_ok=True)
     print(f"Output Path: {outpath}")
 

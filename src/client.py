@@ -415,11 +415,6 @@ def train_fedgdrop_nc(nc, flow, log_z, cli_id, dataloader, opt_nc, opt_flow, num
         
     return tr_accuracy, tr_f1, val_accuracy, val_f1
 
-
-
-
-
-
 @torch.no_grad()
 def eval_nc(model, loader, device):
     model.eval()
@@ -438,13 +433,13 @@ def eval_nc(model, loader, device):
             lss.append(total_loss)
 
         targets = torch.stack(targets).view(-1)
-        if targets.size(0) == 0: return  np.mean(lss) , 1.0
+        if targets.size(0) == 0: 
+            return  np.mean(lss) , 1.0
 
         preds = torch.stack(preds).view(targets.size(0) , -1 )
         preds = preds.max(1)[1]
         acc = 100 * preds.eq(targets).sum().item() / targets.size(0)
         return np.mean(lss) , acc
-    
 
 @torch.inference_mode()
 def eval_fedgdrop(gcn_c: torch.nn.Module,
@@ -598,7 +593,6 @@ def eval_fedgdrop(gcn_c: torch.nn.Module,
         f1 = f1_score(targets, all_predictions, average='micro')
 
     return accuracy, f1
-
 
 def _prox_term(model, Wt):
     prox = torch.tensor(0., requires_grad=True)

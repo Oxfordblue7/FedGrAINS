@@ -105,8 +105,6 @@ class FedGDrop_Server():
         self.local_flow = local_flow
         self.W_flow = None if local_flow else {key: value for key, value in self.flow.named_parameters()}
 
-    
-
     def randomSample_clients(self, all_clients, frac):
         return random.sample(all_clients, int(len(all_clients) * frac))
 
@@ -170,7 +168,6 @@ class FedGDrop_Server():
             for k in self.W_flow.keys():
                 self.W_flow[k].data = torch.div(torch.sum(torch.stack([torch.mul(client.W_flow[k].data,\
                                                                             client.num_nodes) for client in selected_clients]), dim=0), total_size).clone()
-
 
     def compute_mean_update_norm(self, cluster):
         cluster_dWs = []

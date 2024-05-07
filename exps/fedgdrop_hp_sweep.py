@@ -86,7 +86,7 @@ def parse_args():
     parser.add_argument('--hidden', type=int, default=128,
                         help='Number of hidden units.')
     parser.add_argument('--seed', help='seed for randomness;',
-                        type=int, default=42)
+                        type=int, default=1024)
     parser.add_argument('--natural_split', help='use public split to partition',
                         type=bool, default=False)
     parser.add_argument('--datapath', type=str, default='../datasets',
@@ -161,7 +161,7 @@ def main_sweep(config= None):
 
 
     splitedData, num_features, num_classes = setup_devices.prepareData_fedgdrop_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
-                                                       mode = 'v2', partition = args.partition,  seed=1234, overlap=args.overlap)
+                                                        partition = args.partition,  seed=1234, overlap=args.overlap)
     print("Done")
 
     random.seed(args.seed)

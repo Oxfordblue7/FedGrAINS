@@ -22,9 +22,9 @@ def process_selftrain(clients, server, local_epoch):
     for k, v in allAccs.items():
         df.loc[k, [f'train_acc', f'val_acc', f'test_acc', f'globtest_acc']] = v
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_selftrain_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_selftrain_{args.batch_size}_GC{suffix}.csv')
     df.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -70,9 +70,9 @@ def process_fedprox(clients, server, mu):
     print("Running FedProx ...")
     frame = run_fedprox(clients, server, args.num_rounds, args.local_epoch, mu, samp=None)
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_fedprox_mu{mu}_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_{args.dropping_method}_{args.dropout}_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_fedprox_mu{mu}_{args.batch_size}_GC{suffix}.csv')
     frame.to_csv(outfile)
     print(f"Wrote to file: {outfile}")
 
@@ -81,9 +81,9 @@ def process_gcfl(clients, server):
     print("Running GCFL ...")
 
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_gcfl_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_gcfl_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_{args.batch_size}_GC{suffix}.csv')
 
     frame = run_gcfl(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1)
     frame.to_csv(outfile)
@@ -94,9 +94,9 @@ def process_gcfl_nc(clients, server):
     print("Running GCFL ...")
 
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_gcfl_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_gcfl_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcfl_{args.batch_size}_GC{suffix}.csv')
 
     frame = run_gcfl_nc(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1)
     frame.to_csv(outfile)
@@ -107,9 +107,9 @@ def process_gcflplus(clients, server):
     print("Running GCFL plus ...")
 
     if args.repeat is None:
-        outfile = os.path.join(outpath, f'accuracy_gcflplus_GC{suffix}.csv')
+        outfile = os.path.join(outpath, f'accuracy_gcflplus_{args.batch_size}_GC{suffix}.csv')
     else:
-        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplus_GC{suffix}.csv')
+        outfile = os.path.join(outpath, "repeats", f'{args.repeat}_accuracy_gcflplus_{args.batch_size}_GC{suffix}.csv')
 
     frame = run_gcflplus(clients, server, args.num_rounds, args.local_epoch, EPS_1 = 0.05, EPS_2 = 0.1, seq_length = args.seq_length, standardize = False)
     frame.to_csv(outfile)
@@ -138,14 +138,10 @@ if __name__ == '__main__':
                         help='Number of hidden units.')
     parser.add_argument('--dropout', type=float, default=0.,
                         help='Dropout rate (1 - keep probability).')
-    parser.add_argument('-dm', '--dropping_method', type=str, default='DropEdge',
-                    help='The chosen dropping method [Dropout, DropEdge, DropNode, DropMessage,NA].')
     parser.add_argument('--batch_size', type=int, default=64,
                         help='Batch size for node classification.')
     parser.add_argument('--seed', help='seed for randomness;',
                         type=int, default=42)
-    parser.add_argument('--natural_split', help='use public split to partition',
-                        type=bool, default=False)
     parser.add_argument('--partition', help='Graph partitioning algorithm',
                         type=str, default="METIS")
     parser.add_argument('--datapath', type=str, default='../datasets',
@@ -220,7 +216,7 @@ if __name__ == '__main__':
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
     wandb.init( project = 'fedgdrop',
-        name=f'{args.dataset}_v2-{args.num_clients}clients-{args.model}-fedgdrop',
+        name=f'{args.dataset}-{args.num_clients}clients-{args.model}-fedgdrop',
         mode='online' if args.log_wandb else 'disabled',
         config = args
     )
@@ -249,7 +245,7 @@ if __name__ == '__main__':
     if args.repeat is not None:
         Path(os.path.join(outpath, 'repeats')).mkdir(parents=True, exist_ok=True)
     splitedData, num_features, num_classes = setup_devices.prepareData_fedgdrop_oneDS(args.datapath, args.dataset, num_client=args.num_clients, batchSize=args.batch_size,
-                                                       mode = 'v2', partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
+                                                        partition = args.partition,  seed=seed_dataSplit, overlap=args.overlap)
     print("Done")
 
     # save statistics of data on clients
