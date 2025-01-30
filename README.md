@@ -1,4 +1,4 @@
-# FedGDrop
+# FedGrAINS
 
 ## Requirements & Data Preparation
 To install requirements
